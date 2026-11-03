@@ -3,7 +3,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <title>UI Exciter</title>
 <style>
-  /* Layout: one column, balance on top, question card below, choices stacked for thumbs */
+  /* Layout: one column. HUD (avatar + balance) on top, Play/Style tabs, then the active view */
   :root {
     --bg: #eef1f6;
     --fg: #1b2230;
@@ -30,6 +30,7 @@
     color-scheme: dark;
   }
 
+  [hidden] { display: none !important; }
   html, body { min-height: 100%; }
   body {
     margin: 0;
@@ -39,31 +40,38 @@
     font-size: 16px;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
-    padding-block: 24px;
+    padding-block: 20px;
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
   }
-  main {
-    max-width: 480px;
-    margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
+  main { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  button { font: inherit; color: inherit; touch-action: manipulation; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
-  .score { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .label {
-    font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+  .label { font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+  /* HUD */
+  .hud { display: flex; align-items: center; gap: 14px; }
+  #hud-avatar {
+    width: 72px; height: 72px; padding: 0; border: none; border-radius: 50%;
+    background: none; cursor: pointer; flex: none;
   }
+  .avatar { display: block; width: 100%; height: 100%; border-radius: 50%; }
+  .balance { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   #money {
     font-family: var(--font-display);
-    font-size: clamp(2.75rem, 14vw, 5rem);
+    font-size: clamp(2.2rem, 11vw, 3.4rem);
     line-height: 1;
     font-variant-numeric: tabular-nums;
   }
   #money.neg { color: var(--down); }
   #money.bump { animation: bump 180ms ease-out; }
   @keyframes bump { 50% { transform: scale(1.1); } }
+
+  /* Tabs */
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+  .tabs button { border: none; background: none; padding: 10px; border-radius: 9px; font-weight: 700; cursor: pointer; color: var(--muted); }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: #fff; }
 
   .card {
     background: var(--card);
@@ -74,87 +82,125 @@
     flex-direction: column;
     gap: 16px;
   }
-  #progress { margin: 0; }
-  #question {
-    margin: 0;
-    font-size: 1.2rem;
-    line-height: 1.35;
-    font-weight: 600;
-    text-wrap: balance;
-  }
 
+  /* Play view */
+  #progress { margin: 0; }
+  #question { margin: 0; font-size: 1.2rem; line-height: 1.35; font-weight: 600; text-wrap: balance; }
   #choices { display: flex; flex-direction: column; gap: 10px; }
   .choice {
-    font: inherit;
-    text-align: left;
-    padding: 14px 16px;
-    border-radius: 12px;
-    border: 2px solid var(--line);
-    background: var(--bg);
-    color: var(--fg);
-    cursor: pointer;
-    touch-action: manipulation;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
+    text-align: left; padding: 14px 16px; border-radius: 12px;
+    border: 2px solid var(--line); background: var(--bg); cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
   }
-  .choice:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .choice:disabled { cursor: default; opacity: 0.45; }
   .choice.picked { opacity: 1; border-color: var(--accent); }
-  .choice .delta { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-
+  .delta { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
   #result { display: flex; flex-direction: column; gap: 8px; }
-  #delta {
-    font-family: var(--font-display);
-    font-size: 1.8rem;
-    font-variant-numeric: tabular-nums;
-  }
+  #result-delta { font-family: var(--font-display); font-size: 1.8rem; font-variant-numeric: tabular-nums; }
   .up { color: var(--up); }
   .down { color: var(--down); }
   #explain { margin: 0; line-height: 1.5; }
 
   .primary {
-    font: inherit;
-    font-weight: 700;
-    padding: 14px;
-    border: none;
-    border-radius: 12px;
-    background: var(--accent);
-    color: #fff;
-    box-shadow: 0 5px 0 var(--accent-edge);
-    cursor: pointer;
-    touch-action: manipulation;
+    font-weight: 700; padding: 14px; border: none; border-radius: 12px;
+    background: var(--accent); color: #fff; box-shadow: 0 5px 0 var(--accent-edge); cursor: pointer;
   }
-  .primary:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--accent-edge); }
-  .primary:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+  .primary:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 var(--accent-edge); }
+  .primary:disabled { background: var(--line); color: var(--muted); box-shadow: none; cursor: default; }
+  .ghost { border: 2px solid var(--line); background: none; border-radius: 12px; padding: 12px; font-weight: 700; cursor: pointer; }
 
-  @media (prefers-reduced-motion: reduce) {
-    #money.bump { animation: none; }
+  /* Style view */
+  .stage { display: flex; justify-content: center; }
+  .stage .avatar-wrap { width: min(60vw, 220px); aspect-ratio: 1; max-width: 100%; }
+  .slots { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .slots::-webkit-scrollbar { display: none; }
+  .slots button {
+    flex: none; border: 2px solid var(--line); background: var(--bg); border-radius: 999px;
+    padding: 8px 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
   }
+  .slots button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+  .tile {
+    border: 2px solid var(--line); background: var(--bg); border-radius: 14px;
+    padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;
+  }
+  .tile .avatar-wrap { width: 64px; height: 64px; }
+  .tile .name { font-size: 0.85rem; font-weight: 600; text-align: center; line-height: 1.2; }
+  .tile .tag { font-size: 0.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile.wearing { border-color: var(--accent); }
+  .tile.wearing .tag { color: var(--accent); }
+  .tile.selected { border-color: var(--fg); }
+  .tile.locked .tag { color: var(--muted); }
+  .buybar { display: flex; flex-direction: column; gap: 8px; }
+  .buybar .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  #buy-note { margin: 0; text-align: center; color: var(--muted); font-size: 0.9rem; }
+  #reset { align-self: center; border: none; background: none; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 8px; font-size: 0.85rem; }
+
+  @media (prefers-reduced-motion: reduce) { #money.bump { animation: none; } }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=DM+Sans:wght@400;600;700&display=swap">
 
+<!-- Shared SVG paint servers, referenced by every avatar on the page -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <clipPath id="c-round"><circle cx="100" cy="100" r="100"/></clipPath>
+    <linearGradient id="g-midnight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d2340"/><stop offset="1" stop-color="#3b2a5c"/></linearGradient>
+    <linearGradient id="g-sunset" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff6f61"/><stop offset=".55" stop-color="#ffa36c"/><stop offset="1" stop-color="#ffd86f"/></linearGradient>
+    <linearGradient id="g-night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d0a24"/><stop offset="1" stop-color="#3a0f5c"/></linearGradient>
+    <linearGradient id="g-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1a8"/><stop offset=".5" stop-color="#f2b81d"/><stop offset="1" stop-color="#a8740a"/></linearGradient>
+    <linearGradient id="g-chrome" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f6fa"/><stop offset=".35" stop-color="#9aa3b5"/><stop offset=".6" stop-color="#e6e9f0"/><stop offset="1" stop-color="#6f788c"/></linearGradient>
+    <linearGradient id="g-shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3f55"/><stop offset="1" stop-color="#0e0f14"/></linearGradient>
+    <linearGradient id="g-visor" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#00f0ff"/><stop offset=".5" stop-color="#a14bff"/><stop offset="1" stop-color="#ff4fb3"/></linearGradient>
+    <pattern id="p-grid" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M0 0H16M0 0V16" stroke="#ff4fd8" stroke-width="1.2" fill="none"/></pattern>
+    <filter id="f-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
 <main>
-  <div class="score">
-    <span class="label">Balance</span>
-    <span id="money">$0</span>
+  <div class="hud">
+    <button id="hud-avatar" type="button" aria-label="Customise avatar"></button>
+    <div class="balance">
+      <span class="label">Balance</span>
+      <span id="money">$0</span>
+    </div>
   </div>
 
-  <section class="card" aria-live="polite">
+  <div class="tabs" role="tablist">
+    <button id="tab-play" type="button" role="tab" aria-selected="true">Play</button>
+    <button id="tab-style" type="button" role="tab" aria-selected="false">Style shop</button>
+  </div>
+
+  <section id="view-play" class="card" aria-live="polite">
     <p id="progress" class="label"></p>
     <h1 id="question"></h1>
     <div id="choices"></div>
     <div id="result" hidden>
-      <span id="delta"></span>
+      <span id="result-delta"></span>
       <p id="explain"></p>
     </div>
     <button id="next" class="primary" type="button" hidden>Next question</button>
   </section>
+
+  <section id="view-style" class="card" hidden>
+    <div class="stage"><div id="stage-avatar" class="avatar-wrap"></div></div>
+    <div class="slots" id="slots"></div>
+    <div class="grid" id="items"></div>
+    <div class="buybar" id="buybar" hidden>
+      <div class="row">
+        <button id="buy" class="primary" type="button">Buy</button>
+        <button id="cancel" class="ghost" type="button">Cancel</button>
+      </div>
+      <p id="buy-note"></p>
+    </div>
+    <button id="reset" type="button">Reset game</button>
+  </section>
 </main>
 
 <script>
-  // ---- Game data: edit freely. `delta` is hidden until the player picks. ----
+  // ================= Game data (edit freely) =================
   const START_MONEY = 1000;
   const QUESTIONS = [
     {
@@ -200,52 +246,239 @@
     },
   ];
 
-  // ---- Elements ----
-  const $ = (id) => document.getElementById(id);
-  const moneyEl = $('money'), progressEl = $('progress'), questionEl = $('question');
-  const choicesEl = $('choices'), resultEl = $('result'), deltaEl = $('delta');
-  const explainEl = $('explain'), nextBtn = $('next');
+  // ================= Avatar parts =================
+  // Shoulders shape shared by every outfit.
+  const SHOULDERS = 'M28 200 C28 152 62 136 100 136 C138 136 172 152 172 200 Z';
+  const NECKLINE = (skin) => `<path d="M86 136 Q100 149 114 136 Z" fill="${skin}"/>`;
 
-  // ---- State ----
-  let money = START_MONEY;
-  let index = 0;      // current question
-  let picked = null;  // index of chosen answer, or null
+  const SLOTS = [
+    { id: 'outfit', name: 'Outfit', items: [
+      { id: 'hoodie', name: 'Hoodie', price: 0, draw: (s) =>
+        `<path d="${SHOULDERS}" fill="#2b2f3a"/>${NECKLINE(s)}
+         <path d="M72 140 Q100 166 128 140" stroke="#3d4352" stroke-width="10" fill="none" stroke-linecap="round"/>
+         <path d="M92 152 L90 176 M108 152 L110 176" stroke="#d9dce5" stroke-width="2.5" stroke-linecap="round"/>` },
+      { id: 'tee', name: 'Red tee', price: 0, draw: (s) =>
+        `<path d="${SHOULDERS}" fill="#e84a5f"/>${NECKLINE(s)}` },
+      { id: 'bomber', name: 'Bomber', price: 400, draw: (s) =>
+        `<path d="${SHOULDERS}" fill="#4a5a3c"/>${NECKLINE(s)}
+         <path d="M78 139 Q100 156 122 139" stroke="#e07a2f" stroke-width="7" fill="none" stroke-linecap="round"/>
+         <path d="M100 153 V200" stroke="#2b2f22" stroke-width="2.5"/>
+         <path d="M46 170 L60 166 M154 170 L140 166" stroke="#e07a2f" stroke-width="3" stroke-linecap="round"/>` },
+      { id: 'suit', name: 'Sharp suit', price: 600, draw: () =>
+        `<path d="${SHOULDERS}" fill="#1c1f2b"/>
+         <path d="M84 136 L100 178 L116 136 Z" fill="#f4f4f6"/>
+         <path d="M82 137 L98 178 L84 156 Z M118 137 L102 178 L116 156 Z" fill="#2c3042"/>
+         <path d="M97 142 L103 142 L106 170 L100 178 L94 170 Z" fill="#d22f3c"/>` },
+      { id: 'chrome', name: 'Chrome jacket', price: 900, draw: (s) =>
+        `<path d="${SHOULDERS}" fill="url(#g-chrome)"/>${NECKLINE(s)}
+         <path d="M80 139 Q100 154 120 139" stroke="#7b8498" stroke-width="5" fill="none" stroke-linecap="round"/>
+         <path d="M100 151 V200" stroke="#5d6578" stroke-width="2"/>` },
+    ]},
+    { id: 'hair', name: 'Hair', items: [
+      { id: 'quiff', name: 'Quiff', price: 0, top: 24, draw: (c) => ({ front:
+        `<path d="M63 88 C58 56 76 44 98 44 C124 44 142 56 137 88 C132 70 118 62 100 63 C82 64 68 72 63 88 Z" fill="${c}"/>
+         <path d="M84 54 C88 22 132 16 150 34 C132 30 116 36 108 58 Z" fill="${c}"/>` }) },
+      { id: 'buzz', name: 'Buzz cut', price: 0, top: 50, draw: (c) => ({ front:
+        `<path d="M64 86 C62 50 138 50 136 86 C128 66 72 66 64 86 Z" fill="${c}"/>` }) },
+      { id: 'long', name: 'Long', price: 150, top: 48, draw: (c) => ({
+        back: `<path d="M62 84 C58 40 142 40 138 84 L144 150 C130 158 70 158 56 150 Z" fill="${c}"/>`,
+        front: `<path d="M64 88 C60 52 140 52 136 88 C126 64 104 58 84 70 C76 76 68 80 64 88 Z" fill="${c}"/>` }) },
+      { id: 'spikes', name: 'Spikes', price: 180, top: 30, draw: (c) => ({ front:
+        `<path d="M63 86 L58 58 L72 64 L72 40 L86 54 L96 30 L106 52 L120 34 L124 56 L140 46 L137 70 L137 86 C128 66 72 66 63 86 Z" fill="${c}"/>` }) },
+      { id: 'afro', name: 'Afro', price: 220, top: 22, draw: (c) => ({
+        back: `<circle cx="100" cy="72" r="50" fill="${c}"/>`,
+        front: `<path d="M64 84 C64 56 136 56 136 84 C124 70 76 70 64 84 Z" fill="${c}"/>` }) },
+      { id: 'mohawk', name: 'Mohawk', price: 300, top: 18, draw: (c) => ({ front:
+        `<path d="M64 86 C62 50 138 50 136 86 C128 66 72 66 64 86 Z" fill="${c}" opacity=".35"/>
+         <path d="M90 66 L84 36 L94 40 L96 16 L104 36 L114 24 L110 66 Z" fill="${c}"/>` }) },
+    ]},
+    { id: 'hairColor', name: 'Hair colour', items: [
+      { id: 'black', name: 'Black', price: 0, color: '#1c1a1f' },
+      { id: 'brown', name: 'Brown', price: 0, color: '#5a3825' },
+      { id: 'blonde', name: 'Blonde', price: 0, color: '#e2b857' },
+      { id: 'ginger', name: 'Ginger', price: 0, color: '#c4552b' },
+      { id: 'silver', name: 'Silver', price: 80, color: '#dfe3ea' },
+      { id: 'pink', name: 'Neon pink', price: 150, color: '#ff4fb3' },
+      { id: 'blue', name: 'Electric blue', price: 150, color: '#3fa9ff' },
+      { id: 'green', name: 'Toxic green', price: 200, color: '#7cff4f' },
+    ]},
+    { id: 'eyewear', name: 'Eyewear', items: [
+      { id: 'none', name: 'None', price: 0, draw: () => '' },
+      { id: 'round', name: 'Round specs', price: 80, draw: () =>
+        `<circle cx="86" cy="90" r="9.5" fill="#fff" fill-opacity=".15" stroke="#1b1b1b" stroke-width="2.5"/>
+         <circle cx="114" cy="90" r="9.5" fill="#fff" fill-opacity=".15" stroke="#1b1b1b" stroke-width="2.5"/>
+         <path d="M95.5 89 Q100 85 104.5 89" stroke="#1b1b1b" stroke-width="2.5" fill="none"/>` },
+      { id: 'shades', name: 'Shades', price: 200, draw: () =>
+        `<path d="M64 84 H136" stroke="#111" stroke-width="3"/>
+         <path d="M71 83 H97 V92 Q97 100 89 100 H79 Q71 100 71 92 Z M103 83 H129 V92 Q129 100 121 100 H111 Q103 100 103 92 Z" fill="url(#g-shade)"/>
+         <path d="M75 87 L82 87 M107 87 L114 87" stroke="#fff" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>` },
+      { id: 'visor', name: 'Cyber visor', price: 450, draw: () =>
+        `<path d="M60 80 H140 L136 98 Q100 105 64 98 Z" fill="url(#g-visor)" opacity=".92" filter="url(#f-glow)"/>
+         <path d="M70 85 H128" stroke="#fff" stroke-opacity=".6" stroke-width="1.5"/>` },
+      { id: 'laser', name: 'Laser eyes', price: 800, hidesEyes: true, draw: () =>
+        `<g filter="url(#f-glow)">
+           <path d="M86 88 L0 66 L0 82 L86 92 Z M114 88 L200 66 L200 82 L114 92 Z" fill="#ff3b3b" opacity=".75"/>
+           <circle cx="86" cy="90" r="6" fill="#ff2a2a"/><circle cx="114" cy="90" r="6" fill="#ff2a2a"/>
+           <circle cx="86" cy="90" r="2.5" fill="#fff"/><circle cx="114" cy="90" r="2.5" fill="#fff"/>
+         </g>` },
+    ]},
+    { id: 'headgear', name: 'Headgear', items: [
+      { id: 'none', name: 'None', price: 0, draw: () => '' },
+      { id: 'cap', name: 'Cap', price: 120, draw: () =>
+        `<path d="M62 78 C60 40 140 40 138 78 Z" fill="#2f6bff"/>
+         <path d="M96 74 C120 70 150 72 162 80 C150 86 120 84 96 80 Z" fill="#1d47b8"/>
+         <circle cx="100" cy="45" r="3.5" fill="#1d47b8"/>` },
+      { id: 'phones', name: 'Headphones', price: 250, draw: (top) =>
+        `<path d="M60 96 C56 ${top - 22} 144 ${top - 22} 140 96" stroke="#15171e" stroke-width="7" fill="none"/>
+         <rect x="50" y="80" width="16" height="28" rx="7" fill="#15171e"/>
+         <rect x="134" y="80" width="16" height="28" rx="7" fill="#15171e"/>
+         <rect x="53" y="84" width="10" height="20" rx="5" fill="#ff4fb3"/>
+         <rect x="137" y="84" width="10" height="20" rx="5" fill="#ff4fb3"/>` },
+      { id: 'halo', name: 'Halo', price: 900, draw: (top) =>
+        `<ellipse cx="100" cy="${top - 10}" rx="28" ry="7" fill="none" stroke="#ffd84a" stroke-width="4" filter="url(#f-glow)"/>` },
+      { id: 'crown', name: 'Crown', price: 1500, draw: (top) =>
+        `<g transform="translate(0 ${top - 50})">
+           <path d="M76 54 L72 28 L88 40 L100 22 L112 40 L128 28 L124 54 Z" fill="url(#g-gold)" stroke="#a8740a" stroke-width="1.5"/>
+           <circle cx="100" cy="45" r="3.5" fill="#d22f3c"/><circle cx="86" cy="48" r="2.5" fill="#3fa9ff"/><circle cx="114" cy="48" r="2.5" fill="#3fa9ff"/>
+         </g>` },
+    ]},
+    { id: 'skin', name: 'Skin', items: [
+      { id: 's1', name: 'Tone 1', price: 0, color: '#f9d7c0' },
+      { id: 's2', name: 'Tone 2', price: 0, color: '#eab48f' },
+      { id: 's3', name: 'Tone 3', price: 0, color: '#c98e62' },
+      { id: 's4', name: 'Tone 4', price: 0, color: '#a0673f' },
+      { id: 's5', name: 'Tone 5', price: 0, color: '#6e4529' },
+      { id: 's6', name: 'Tone 6', price: 0, color: '#4a2e1c' },
+      { id: 'alien', name: 'Alien', price: 300, color: '#8fe388' },
+      { id: 'smurf', name: 'Deep blue', price: 300, color: '#6f9cff' },
+    ]},
+    { id: 'bg', name: 'Backdrop', items: [
+      { id: 'midnight', name: 'Midnight', price: 0, fill: 'url(#g-midnight)' },
+      { id: 'mint', name: 'Mint', price: 0, fill: '#8fd9c0' },
+      { id: 'sunset', name: 'Sunset', price: 150, fill: 'url(#g-sunset)',
+        extra: '<circle cx="100" cy="128" r="60" fill="#ffe08a" opacity=".55"/>' },
+      { id: 'grid', name: 'Neon grid', price: 350, fill: 'url(#g-night)',
+        extra: '<rect y="128" width="200" height="72" fill="url(#p-grid)" opacity=".75"/><rect y="126" width="200" height="3" fill="#ff4fd8"/>' },
+      { id: 'gold', name: 'Gold leaf', price: 1000, fill: 'url(#g-gold)',
+        extra: '<path d="M36 36 l3 8 l8 3 l-8 3 l-3 8 l-3 -8 l-8 -3 l8 -3 Z M162 52 l2 6 l6 2 l-6 2 l-2 6 l-2 -6 l-6 -2 l6 -2 Z" fill="#fff" opacity=".85"/>' },
+    ]},
+  ];
+  const SLOT = Object.fromEntries(SLOTS.map((s) => [s.id, s]));
+  const item = (slot, id) => SLOT[slot].items.find((i) => i.id === id) || SLOT[slot].items[0];
+  const DEFAULT_LOOK = { outfit: 'hoodie', hair: 'quiff', hairColor: 'black', eyewear: 'none', headgear: 'none', skin: 's2', bg: 'midnight' };
 
-  const fmt = (n) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString();
-  const fmtDelta = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + '$' + Math.abs(n).toLocaleString();
+  const MOUTHS = {
+    neutral: 'M90 109 Q100 114 110 109',
+    happy: 'M87 105 Q100 121 113 105',
+    sad: 'M90 113 Q100 104 110 113',
+  };
 
-  function renderMoney(animate) {
-    moneyEl.textContent = fmt(money);
-    moneyEl.classList.toggle('neg', money < 0);
-    if (animate) {
-      moneyEl.classList.remove('bump');
-      void moneyEl.offsetWidth;
-      moneyEl.classList.add('bump');
-    }
+  function avatarSVG(look, mood = 'neutral') {
+    const skin = item('skin', look.skin).color;
+    const hc = item('hairColor', look.hairColor).color;
+    const hair = item('hair', look.hair);
+    const hairParts = hair.draw(hc);
+    const bg = item('bg', look.bg);
+    const eyes = item('eyewear', look.eyewear);
+    const head = item('headgear', look.headgear);
+
+    const face = eyes.hidesEyes ? '' :
+      `<ellipse cx="86" cy="90" rx="4" ry="5" fill="#1f1a24"/><ellipse cx="114" cy="90" rx="4" ry="5" fill="#1f1a24"/>
+       <circle cx="87.5" cy="88" r="1.4" fill="#fff"/><circle cx="115.5" cy="88" r="1.4" fill="#fff"/>`;
+
+    return `<svg class="avatar" viewBox="0 0 200 200" role="img" aria-label="Avatar"><g clip-path="url(#c-round)">
+      <rect width="200" height="200" fill="${bg.fill}"/>${bg.extra || ''}
+      ${hairParts.back || ''}
+      <rect x="88" y="110" width="24" height="34" fill="${skin}"/><rect x="88" y="110" width="24" height="34" fill="#000" opacity=".15"/>
+      ${item('outfit', look.outfit).draw(skin)}
+      <circle cx="64" cy="92" r="7" fill="${skin}"/><circle cx="136" cy="92" r="7" fill="${skin}"/>
+      <ellipse cx="100" cy="88" rx="36" ry="40" fill="${skin}"/>
+      <circle cx="78" cy="102" r="5" fill="#ff7a7a" opacity=".25"/><circle cx="122" cy="102" r="5" fill="#ff7a7a" opacity=".25"/>
+      <path d="M100 92 Q96 100 101 101" stroke="#000" stroke-opacity=".25" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M79 79 Q86 75 93 79 M107 79 Q114 75 121 79" stroke="${hc}" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      ${face}
+      <path d="${MOUTHS[mood] || MOUTHS.neutral}" stroke="#2a1a14" stroke-width="3" fill="none" stroke-linecap="round"/>
+      ${hairParts.front || ''}
+      ${eyes.draw()}
+      ${head.draw(hair.top)}
+    </g></svg>`;
   }
 
-  function render() {
+  // ================= State =================
+  const SAVE_KEY = 'ui-exciter-save';
+  let money = START_MONEY;
+  let index = 0;          // current question
+  let picked = null;      // chosen answer index for current question
+  let owned = [];         // "slot:item" keys of bought items (free items are always owned)
+  let look = { ...DEFAULT_LOOK };
+  let mood = 'neutral';
+  let view = 'play';
+  let shopSlot = 'outfit';
+  let preview = null;     // item id being previewed (not yet bought) in shopSlot
+  let resetArmed = false;
+
+  const isOwned = (slot, it) => it.price === 0 || owned.includes(slot + ':' + it.id);
+
+  function save() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money, index, picked, owned, look })); } catch {}
+  }
+  function loadSaved() {
+    try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch { return {}; }
+  }
+  function applyState(d) {
+    if (typeof d.money === 'number') money = d.money;
+    if (typeof d.index === 'number') index = d.index;
+    if (d.picked === null || typeof d.picked === 'number') picked = d.picked ?? null;
+    if (Array.isArray(d.owned)) owned = d.owned;
+    if (d.look) look = { ...DEFAULT_LOOK, ...d.look };
+  }
+
+  // ================= Rendering =================
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString();
+  const fmtDelta = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + '$' + Math.abs(n).toLocaleString();
+  const signClass = (n) => (n > 0 ? 'up' : n < 0 ? 'down' : '');
+
+  function renderMoney(animate) {
+    const el = $('money');
+    el.textContent = fmt(money);
+    el.classList.toggle('neg', money < 0);
+    if (animate) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+  }
+
+  function renderHud() {
+    $('hud-avatar').innerHTML = avatarSVG(look, mood);
     renderMoney(false);
+  }
+
+  function renderTabs() {
+    $('tab-play').setAttribute('aria-selected', view === 'play');
+    $('tab-style').setAttribute('aria-selected', view === 'style');
+    $('view-play').hidden = view !== 'play';
+    $('view-style').hidden = view !== 'style';
+  }
+
+  function renderPlay() {
+    const choicesEl = $('choices');
     choicesEl.replaceChildren();
+    const resultEl = $('result'), deltaEl = $('result-delta'), nextBtn = $('next');
 
     if (index >= QUESTIONS.length) {
-      progressEl.textContent = 'Game over';
-      questionEl.textContent = 'You finished with ' + fmt(money) + '.';
-      const diff = money - START_MONEY;
+      $('progress').textContent = 'Round over';
+      $('question').textContent = 'You finished the round with ' + fmt(money) + '.';
       resultEl.hidden = false;
-      deltaEl.textContent = fmtDelta(diff);
-      deltaEl.className = diff > 0 ? 'up' : diff < 0 ? 'down' : '';
-      explainEl.textContent = 'You started with ' + fmt(START_MONEY) + '.';
-      nextBtn.textContent = 'Play again';
+      deltaEl.textContent = '';
+      $('explain').textContent = 'Spend it in the Style shop, or play another round to earn more.';
+      nextBtn.textContent = 'Play another round';
       nextBtn.hidden = false;
       return;
     }
 
-    const item = QUESTIONS[index];
-    progressEl.textContent = 'Question ' + (index + 1) + ' of ' + QUESTIONS.length;
-    questionEl.textContent = item.q;
+    const q = QUESTIONS[index];
+    $('progress').textContent = 'Question ' + (index + 1) + ' of ' + QUESTIONS.length;
+    $('question').textContent = q.q;
 
-    item.choices.forEach((c, i) => {
+    q.choices.forEach((c, i) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'choice';
@@ -257,7 +490,7 @@
         if (i === picked) {
           b.classList.add('picked');
           const d = document.createElement('span');
-          d.className = 'delta ' + (c.delta > 0 ? 'up' : c.delta < 0 ? 'down' : '');
+          d.className = 'delta ' + signClass(c.delta);
           d.textContent = fmtDelta(c.delta);
           b.append(d);
         }
@@ -270,42 +503,147 @@
       resultEl.hidden = true;
       nextBtn.hidden = true;
     } else {
-      const c = item.choices[picked];
+      const c = q.choices[picked];
       resultEl.hidden = false;
       deltaEl.textContent = fmtDelta(c.delta);
-      deltaEl.className = c.delta > 0 ? 'up' : c.delta < 0 ? 'down' : '';
-      explainEl.textContent = c.why;
-      nextBtn.textContent = index + 1 < QUESTIONS.length ? 'Next question' : 'See result';
+      deltaEl.className = signClass(c.delta);
+      $('explain').textContent = c.why;
+      nextBtn.textContent = index + 1 < QUESTIONS.length ? 'Next question' : 'Finish round';
       nextBtn.hidden = false;
     }
   }
 
+  function renderStyle() {
+    const shown = preview ? { ...look, [shopSlot]: preview } : look;
+    $('stage-avatar').innerHTML = avatarSVG(shown, mood);
+
+    const slotsEl = $('slots');
+    slotsEl.replaceChildren(...SLOTS.map((s) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = s.name;
+      b.setAttribute('aria-pressed', s.id === shopSlot);
+      b.addEventListener('click', () => { shopSlot = s.id; preview = null; renderStyle(); });
+      return b;
+    }));
+
+    const grid = $('items');
+    grid.replaceChildren(...SLOT[shopSlot].items.map((it) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      const have = isOwned(shopSlot, it);
+      const wearing = look[shopSlot] === it.id;
+      b.className = 'tile' + (wearing ? ' wearing' : '') + (preview === it.id ? ' selected' : '') +
+        (!have && it.price > money ? ' locked' : '');
+      const tag = wearing ? 'Wearing' : have ? (it.price ? 'Owned' : 'Free') : fmt(it.price);
+      b.innerHTML = `<div class="avatar-wrap">${avatarSVG({ ...look, [shopSlot]: it.id })}</div>
+        <span class="name"></span><span class="tag">${tag}</span>`;
+      b.querySelector('.name').textContent = it.name;
+      b.addEventListener('click', () => pickItem(it));
+      return b;
+    }));
+
+    const bar = $('buybar');
+    if (!preview) { bar.hidden = true; return; }
+    const it = item(shopSlot, preview);
+    bar.hidden = false;
+    const buy = $('buy');
+    buy.textContent = 'Buy ' + it.name + ' for ' + fmt(it.price);
+    buy.disabled = money < it.price;
+    $('buy-note').textContent = money < it.price
+      ? 'You need ' + fmt(it.price - money) + ' more. Play a round to earn it.'
+      : 'Leaves you with ' + fmt(money - it.price) + '.';
+  }
+
+  function renderAll() {
+    renderHud();
+    renderTabs();
+    renderPlay();
+    renderStyle();
+  }
+
+  // ================= Actions =================
   function choose(i) {
     if (picked !== null) return;
     picked = i;
-    money += QUESTIONS[index].choices[i].delta;
-    render();
+    const d = QUESTIONS[index].choices[i].delta;
+    money += d;
+    mood = d > 0 ? 'happy' : d < 0 ? 'sad' : 'neutral';
+    save();
+    renderAll();
     renderMoney(true);
-    nextBtn.focus({ preventScroll: true });
+    $('next').focus({ preventScroll: true });
   }
 
-  nextBtn.addEventListener('click', () => {
-    if (index >= QUESTIONS.length) {
-      money = START_MONEY; index = 0;
-    } else {
-      index += 1;
-    }
+  $('next').addEventListener('click', () => {
+    index = index >= QUESTIONS.length ? 0 : index + 1;  // new round keeps your balance
     picked = null;
-    render();
+    mood = 'neutral';
+    save();
+    renderAll();
     window.scrollTo({ top: 0 });
   });
 
-  function start(data) {
-    if (typeof data.money === 'number') {
-      money = data.money; index = data.index; picked = data.picked;
+  function pickItem(it) {
+    if (isOwned(shopSlot, it)) {
+      look[shopSlot] = it.id;
+      preview = null;
+      save();
+    } else {
+      preview = preview === it.id ? null : it.id;
     }
-    render();
+    renderHud();
+    renderStyle();
   }
-  window.claude?.hot?.snapshot?.(() => ({ money, index, picked }));
+
+  $('buy').addEventListener('click', () => {
+    if (!preview) return;
+    const it = item(shopSlot, preview);
+    if (money < it.price) return;
+    money -= it.price;
+    owned.push(shopSlot + ':' + it.id);
+    look[shopSlot] = it.id;
+    preview = null;
+    mood = 'happy';
+    save();
+    renderHud();
+    renderStyle();
+    renderMoney(true);
+  });
+  $('cancel').addEventListener('click', () => { preview = null; renderStyle(); });
+
+  function setView(v) {
+    view = v;
+    preview = null;
+    renderTabs();
+    renderStyle();
+  }
+  $('tab-play').addEventListener('click', () => setView('play'));
+  $('tab-style').addEventListener('click', () => setView('style'));
+  $('hud-avatar').addEventListener('click', () => setView('style'));
+
+  $('reset').addEventListener('click', () => {
+    const btn = $('reset');
+    if (!resetArmed) {
+      resetArmed = true;
+      btn.textContent = 'Tap again to wipe your balance and items';
+      setTimeout(() => { resetArmed = false; btn.textContent = 'Reset game'; }, 4000);
+      return;
+    }
+    resetArmed = false;
+    btn.textContent = 'Reset game';
+    money = START_MONEY; index = 0; picked = null; owned = []; look = { ...DEFAULT_LOOK };
+    mood = 'neutral'; preview = null;
+    save();
+    renderAll();
+  });
+
+  // ================= Boot =================
+  function start(data) {
+    applyState(loadSaved());
+    if (data && typeof data.money === 'number') applyState(data);
+    renderAll();
+  }
+  window.claude?.hot?.snapshot?.(() => ({ money, index, picked, owned, look }));
   window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 </script>
