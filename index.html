@@ -70,7 +70,7 @@
   @keyframes bump { 50% { transform: scale(1.1); } }
   .persona-chip {
     align-self: flex-start; font-size: 0.8rem; font-weight: 700;
-    padding: 3px 10px; border-radius: 999px; border: 2px solid var(--level, var(--line));
+    padding: 3px 10px; border-radius: 999px; border: 2px solid var(--level, var(--line)); white-space: nowrap;
   }
 
   .goal { display: flex; flex-direction: column; gap: 6px; }
@@ -212,7 +212,12 @@
   .buybar { display: flex; flex-direction: column; gap: 8px; }
   .buybar .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
   #buy-note { margin: 0; text-align: center; color: var(--muted); font-size: 0.9rem; }
-  #reset { align-self: center; border: none; background: none; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 8px; font-size: 0.85rem; }
+  #reset {
+    margin-left: auto; align-self: flex-start; flex: none;
+    border: 2px solid var(--line); background: var(--card); color: var(--muted);
+    border-radius: 999px; padding: 6px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+  }
+  #reset.armed { border-color: var(--down); color: var(--down); }
 
   @media (prefers-reduced-motion: reduce) {
     #money.bump { animation: none; }
@@ -251,6 +256,7 @@
       <span id="money">$0</span>
       <span id="persona-chip" class="persona-chip"></span>
     </div>
+    <button id="reset" type="button">Reset</button>
   </div>
 
   <div class="goal" id="goal-block">
@@ -311,7 +317,6 @@
       </div>
       <p id="buy-note"></p>
     </div>
-    <button id="reset" type="button">Reset game</button>
   </section>
 </main>
 
@@ -1222,12 +1227,15 @@
     const btn = $('reset');
     if (!resetArmed) {
       resetArmed = true;
-      btn.textContent = 'Tap again to wipe everything';
-      setTimeout(() => { resetArmed = false; btn.textContent = 'Reset game'; }, 4000);
+      btn.textContent = 'Confirm';
+      btn.classList.add('armed');
+      setTimeout(() => { resetArmed = false; btn.textContent = 'Reset'; btn.classList.remove('armed'); }, 3000);
       return;
     }
     resetArmed = false;
-    btn.textContent = 'Reset game';
+    btn.textContent = 'Reset';
+    btn.classList.remove('armed');
+    window.scrollTo({ top: 0 });
     money = START_MONEY; setupStep = 0; bands = []; index = 0; picked = null; roll = null; owned = [];
     look = { ...DEFAULT_LOOK }; goal = null; achieved = []; traits = { ...START_TRAITS }; bestLevel = 1; fx = null;
     mood = 'neutral'; preview = null; view = 'play';
