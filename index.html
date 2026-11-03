@@ -3,13 +3,14 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <title>UI Exciter</title>
 <style>
-  /* Layout: one column. HUD (avatar + balance) on top, Play/Style tabs, then the active view */
+  /* Layout: one column. HUD (avatar, balance, persona, ambition) on top, Play/Profile/Shop tabs, then the active view */
   :root {
     --bg: #eef1f6;
     --fg: #1b2230;
     --muted: #677189;
     --card: #ffffff;
     --line: #d6dbe6;
+    --track: #e3e7ef;
     --accent: #2f6bff;
     --accent-edge: #1d47b8;
     --up: #13804b;
@@ -19,13 +20,13 @@
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #111520; --fg: #e8ecf5; --muted: #8a93a8; --card: #1a2030; --line: #2c3448;
+      --bg: #111520; --fg: #e8ecf5; --muted: #8a93a8; --card: #1a2030; --line: #2c3448; --track: #252c3d;
       --accent: #4b7fff; --accent-edge: #2a4fb0; --up: #3ccf86; --down: #ff6b6b;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #111520; --fg: #e8ecf5; --muted: #8a93a8; --card: #1a2030; --line: #2c3448;
+    --bg: #111520; --fg: #e8ecf5; --muted: #8a93a8; --card: #1a2030; --line: #2c3448; --track: #252c3d;
     --accent: #4b7fff; --accent-edge: #2a4fb0; --up: #3ccf86; --down: #ff6b6b;
     color-scheme: dark;
   }
@@ -44,7 +45,7 @@
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
   }
-  main { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  main { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
   button { font: inherit; color: inherit; touch-action: manipulation; }
   button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
@@ -53,24 +54,37 @@
   /* HUD */
   .hud { display: flex; align-items: center; gap: 14px; }
   #hud-avatar {
-    width: 72px; height: 72px; padding: 0; border: none; border-radius: 50%;
+    width: 76px; height: 76px; padding: 0; border: none; border-radius: 50%;
     background: none; cursor: pointer; flex: none;
   }
   .avatar { display: block; width: 100%; height: 100%; border-radius: 50%; }
-  .balance { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .balance { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   #money {
     font-family: var(--font-display);
-    font-size: clamp(2.2rem, 11vw, 3.4rem);
+    font-size: clamp(2.1rem, 10.5vw, 3.2rem);
     line-height: 1;
     font-variant-numeric: tabular-nums;
   }
   #money.neg { color: var(--down); }
   #money.bump { animation: bump 180ms ease-out; }
   @keyframes bump { 50% { transform: scale(1.1); } }
+  .persona-chip {
+    align-self: flex-start; font-size: 0.8rem; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px; border: 2px solid var(--level, var(--line));
+  }
+
+  .goal { display: flex; flex-direction: column; gap: 6px; }
+  .goal-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 0.9rem; }
+  .goal-row strong { min-width: 0; }
+  .goal-row .meta { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .link { border: none; background: none; padding: 0 0 0 8px; color: var(--accent); font-weight: 700; cursor: pointer; font-size: 0.85rem; }
+  .bar { height: 10px; border-radius: 999px; background: var(--track); overflow: hidden; }
+  .bar > span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width 300ms ease-out; }
+  .goal .bar > span { background: var(--up); }
 
   /* Tabs */
-  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
-  .tabs button { border: none; background: none; padding: 10px; border-radius: 9px; font-weight: 700; cursor: pointer; color: var(--muted); }
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+  .tabs button { border: none; background: none; padding: 10px 4px; border-radius: 9px; font-weight: 700; cursor: pointer; color: var(--muted); }
   .tabs button[aria-selected="true"] { background: var(--accent); color: #fff; }
 
   .card {
@@ -94,13 +108,19 @@
   }
   .choice:disabled { cursor: default; opacity: 0.45; }
   .choice.picked { opacity: 1; border-color: var(--accent); }
+  .choice .sub { display: block; font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
   .delta { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  #result { display: flex; flex-direction: column; gap: 8px; }
+  #result { display: flex; flex-direction: column; gap: 10px; }
   #result-delta { font-family: var(--font-display); font-size: 1.8rem; font-variant-numeric: tabular-nums; }
   .up { color: var(--up); }
   .down { color: var(--down); }
   #explain { margin: 0; line-height: 1.5; }
   #odds { margin: 0; font-size: 0.9rem; color: var(--muted); line-height: 1.4; }
+  .fx { display: flex; flex-wrap: wrap; gap: 6px; }
+  .fx span { font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+  .banner { margin: 0; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--accent); font-weight: 600; line-height: 1.4; }
+  .banner.slip { border-color: var(--down); }
+  .banner.win { border-color: var(--up); }
 
   .primary {
     font-weight: 700; padding: 14px; border: none; border-radius: 12px;
@@ -109,6 +129,24 @@
   .primary:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 var(--accent-edge); }
   .primary:disabled { background: var(--line); color: var(--muted); box-shadow: none; cursor: default; }
   .ghost { border: 2px solid var(--line); background: none; border-radius: 12px; padding: 12px; font-weight: 700; cursor: pointer; }
+
+  /* Profile view */
+  .profile-head { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .profile-head .avatar-wrap { width: min(50vw, 180px); aspect-ratio: 1; max-width: 100%; }
+  #p-name { font-family: var(--font-display); font-size: 1.7rem; margin: 4px 0 0; }
+  #p-risk { font-weight: 700; color: var(--muted); }
+  #p-blurb, #p-next { margin: 0; line-height: 1.5; max-width: 36ch; }
+  #p-next { color: var(--muted); font-size: 0.9rem; }
+  .ladder { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .ladder span { height: 8px; border-radius: 999px; background: var(--track); }
+  .ladder-labels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 0.7rem; color: var(--muted); text-align: center; }
+  .ladder-labels .on { color: var(--fg); font-weight: 700; }
+  .traits { display: flex; flex-direction: column; gap: 12px; }
+  .trait-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 4px; }
+  .trait-row .meta { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .section-title { margin: 0; }
+  #p-goals { margin: 0; padding-left: 1.2em; line-height: 1.6; }
+  #p-goals-empty { margin: 0; color: var(--muted); }
 
   /* Style view */
   .stage { display: flex; justify-content: center; }
@@ -127,17 +165,21 @@
   }
   .tile .avatar-wrap { width: 64px; height: 64px; }
   .tile .name { font-size: 0.85rem; font-weight: 600; text-align: center; line-height: 1.2; }
-  .tile .tag { font-size: 0.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .tag { font-size: 0.8rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
   .tile.wearing { border-color: var(--accent); }
   .tile.wearing .tag { color: var(--accent); }
   .tile.selected { border-color: var(--fg); }
   .tile.locked .tag { color: var(--muted); }
+  .tile.earned .tag { color: var(--up); }
   .buybar { display: flex; flex-direction: column; gap: 8px; }
   .buybar .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
   #buy-note { margin: 0; text-align: center; color: var(--muted); font-size: 0.9rem; }
   #reset { align-self: center; border: none; background: none; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 8px; font-size: 0.85rem; }
 
-  @media (prefers-reduced-motion: reduce) { #money.bump { animation: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    #money.bump { animation: none; }
+    .bar > span { transition: none; }
+  }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=DM+Sans:wght@400;600;700&display=swap">
 
@@ -147,6 +189,7 @@
     <clipPath id="c-round"><circle cx="100" cy="100" r="100"/></clipPath>
     <linearGradient id="g-midnight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d2340"/><stop offset="1" stop-color="#3b2a5c"/></linearGradient>
     <linearGradient id="g-sunset" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff6f61"/><stop offset=".55" stop-color="#ffa36c"/><stop offset="1" stop-color="#ffd86f"/></linearGradient>
+    <linearGradient id="g-sunrise" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fcfff"/><stop offset="1" stop-color="#ffe6b8"/></linearGradient>
     <linearGradient id="g-night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d0a24"/><stop offset="1" stop-color="#3a0f5c"/></linearGradient>
     <linearGradient id="g-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1a8"/><stop offset=".5" stop-color="#f2b81d"/><stop offset="1" stop-color="#a8740a"/></linearGradient>
     <linearGradient id="g-chrome" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f6fa"/><stop offset=".35" stop-color="#9aa3b5"/><stop offset=".6" stop-color="#e6e9f0"/><stop offset="1" stop-color="#6f788c"/></linearGradient>
@@ -162,16 +205,26 @@
 
 <main>
   <div class="hud">
-    <button id="hud-avatar" type="button" aria-label="Customise avatar"></button>
+    <button id="hud-avatar" type="button" aria-label="Open your profile"></button>
     <div class="balance">
       <span class="label">Balance</span>
       <span id="money">$0</span>
+      <span id="persona-chip" class="persona-chip"></span>
     </div>
+  </div>
+
+  <div class="goal">
+    <div class="goal-row">
+      <strong id="goal-name"></strong>
+      <span><span id="goal-meta" class="meta"></span><button id="goal-change" class="link" type="button">Change</button></span>
+    </div>
+    <div class="bar" role="progressbar" aria-label="Ambition progress" aria-valuemin="0" aria-valuemax="100" id="goal-bar"><span id="goal-fill"></span></div>
   </div>
 
   <div class="tabs" role="tablist">
     <button id="tab-play" type="button" role="tab" aria-selected="true">Play</button>
-    <button id="tab-style" type="button" role="tab" aria-selected="false">Style shop</button>
+    <button id="tab-profile" type="button" role="tab" aria-selected="false">Profile</button>
+    <button id="tab-style" type="button" role="tab" aria-selected="false">Shop</button>
   </div>
 
   <section id="view-play" class="card" aria-live="polite">
@@ -182,8 +235,29 @@
       <span id="result-delta"></span>
       <p id="explain"></p>
       <p id="odds" hidden></p>
+      <div id="fx" class="fx"></div>
+      <div id="banners"></div>
     </div>
     <button id="next" class="primary" type="button" hidden>Next question</button>
+  </section>
+
+  <section id="view-profile" class="card" hidden>
+    <div class="profile-head">
+      <div id="p-avatar" class="avatar-wrap"></div>
+      <h2 id="p-name"></h2>
+      <span id="p-risk"></span>
+      <p id="p-blurb"></p>
+    </div>
+    <div>
+      <div class="ladder" id="p-ladder"></div>
+      <div class="ladder-labels" id="p-ladder-labels" style="margin-top:6px"></div>
+    </div>
+    <p id="p-next"></p>
+    <h3 class="label section-title">Financial traits</h3>
+    <div class="traits" id="p-traits"></div>
+    <h3 class="label section-title">Ambitions achieved</h3>
+    <ul id="p-goals"></ul>
+    <p id="p-goals-empty">None yet. Reach your current ambition to add one here.</p>
   </section>
 
   <section id="view-style" class="card" hidden>
@@ -204,53 +278,89 @@
 <script>
   // ================= Game data (edit freely) =================
   const START_MONEY = 1000;
+
+  // Ambitions: what the player is saving towards. Progress = balance / target.
+  const GOALS = [
+    { id: 'emergency', name: 'Emergency fund', target: 2500, desc: 'Three months of essentials, set aside for surprises' },
+    { id: 'holiday', name: 'Dream holiday', target: 4000, desc: 'Two weeks somewhere far away, paid in full' },
+    { id: 'car', name: 'First car', target: 8000, desc: 'A reliable used car, no finance' },
+    { id: 'house', name: 'House deposit', target: 15000, desc: 'A 10% deposit on a first home' },
+    { id: 'retire', name: 'Retire early', target: 30000, desc: 'A head start on financial independence' },
+  ];
+
+  // Traits are 0–100. Each choice nudges the traits it names towards the given value,
+  // so recent behaviour counts most and the profile keeps evolving.
+  const TRAITS = [
+    { id: 'risk', name: 'Risk appetite' },
+    { id: 'discipline', name: 'Discipline' },
+    { id: 'planning', name: 'Long-term planning' },
+    { id: 'resilience', name: 'Resilience' },
+  ];
+  const START_TRAITS = { risk: 50, discipline: 45, planning: 45, resilience: 45 };
+  const TRAIT_RATE = 0.3;
+
+  // Maturity ladder. Level comes from discipline, planning and resilience; risk is a separate axis.
+  const PERSONAS = [
+    { name: 'Firefighter', color: '#ff5a5a', blurb: 'Putting out fires. No buffer yet, so every surprise hurts.',
+      next: 'Get your balance positive and choose options that protect you from shocks.' },
+    { name: 'Enjoyer', color: '#ffb84a', blurb: 'Earning and spending. Life is good today, less so for future you.',
+      next: 'Show some spending discipline and think a little further ahead to become a Saver.' },
+    { name: 'Saver', color: '#2fbf8a', blurb: 'A buffer in place and expensive debt under control. Plays it safe.',
+      next: 'Put money to work for the long term to become a Builder.' },
+    { name: 'Builder', color: '#4b7fff', blurb: 'Investing regularly, with goals that have dates on them.',
+      next: 'Keep making strong long-term choices and achieve an ambition to become a Strategist.' },
+    { name: 'Strategist', color: 'url(#g-gold)', chip: '#e0a91a', blurb: 'Money works for you. Risks are calculated and sized to match.',
+      next: 'Top of the ladder. Stay here by keeping your habits.' },
+  ];
+
   // A choice has either a fixed `delta` + `why`, or `outcomes`: [{ p, delta, why }]
   // where p values add up to 1 and one outcome is rolled when the player picks it.
+  // `traits` describes the behaviour, so it applies whatever the outcome.
   const QUESTIONS = [
     {
       q: "A coworker swears a new crypto coin is about to take off.",
       choices: [
-        { text: "Put $500 in", outcomes: [
+        { text: "Put $500 in", traits: { risk: 90, discipline: 35 }, outcomes: [
           { p: 0.3, delta: 1500, why: "It took off. You sold at the top and tripled your money." },
           { p: 0.7, delta: -450, why: "It crashed 90% within a month. Your coworker has stopped mentioning it." },
         ]},
-        { text: "Put in $100 you can afford to lose", outcomes: [
+        { text: "Put in $100 you can afford to lose", traits: { risk: 65, discipline: 70, resilience: 65 }, outcomes: [
           { p: 0.3, delta: 300, why: "It took off. A small bet, a nice win." },
           { p: 0.7, delta: -90, why: "It crashed, but you only bet what you could afford to lose." },
         ]},
-        { text: "Pass", delta: 0, why: "No upside, no downside." },
+        { text: "Pass", traits: { risk: 20 }, delta: 0, why: "No upside, no downside." },
       ],
     },
     {
       q: "You have $1,000 spare to set aside for the next five years.",
       choices: [
-        { text: "Global index fund", outcomes: [
+        { text: "Global index fund", traits: { risk: 55, planning: 85 }, outcomes: [
           { p: 0.8, delta: 350, why: "Markets had their ups and downs, but broadly rose. Diversification did its job." },
           { p: 0.2, delta: -100, why: "A rough patch for markets. You're down a little, but still invested for the long run." },
         ]},
-        { text: "Your friend's startup", outcomes: [
+        { text: "Your friend's startup", traits: { risk: 95, planning: 40, resilience: 30 }, outcomes: [
           { p: 0.15, delta: 4000, why: "They got acquired. Your stake is worth five times what you paid." },
           { p: 0.85, delta: -1000, why: "Most startups fail, and this one did. The money's gone." },
         ]},
-        { text: "Fixed-rate savings account", delta: 120, why: "Guaranteed, low, and steady. Inflation ate some of it." },
+        { text: "Fixed-rate savings account", traits: { risk: 15, planning: 60, resilience: 70 }, delta: 120, why: "Guaranteed, low, and steady. Inflation ate some of it." },
       ],
     },
     {
       q: "Your side business is picking up. Do you quit your job to go full time?",
       choices: [
-        { text: "Quit and go all in", outcomes: [
+        { text: "Quit and go all in", traits: { risk: 95, resilience: 25 }, outcomes: [
           { p: 0.25, delta: 3000, why: "It worked. Revenue doubled once you could give it your full attention." },
           { p: 0.75, delta: -1500, why: "Sales dipped without a salary to fall back on. You burned through savings." },
         ]},
-        { text: "Keep the job, grow it on evenings", delta: 400, why: "Slower growth, but steady extra income and no risk to your salary." },
-        { text: "Wind it down, it's too much", delta: 0, why: "More free time, no extra income." },
+        { text: "Keep the job, grow it on evenings", traits: { risk: 45, planning: 75, discipline: 75, resilience: 75 }, delta: 400, why: "Slower growth, but steady extra income and no risk to your salary." },
+        { text: "Wind it down, it's too much", traits: { risk: 15, planning: 35 }, delta: 0, why: "More free time, no extra income." },
       ],
     },
     {
       q: "Your new phone comes with an offer of gadget insurance at $10 a month.",
       choices: [
-        { text: "Take the insurance", delta: -120, why: "A year of premiums and nothing went wrong. That's how insurance usually goes." },
-        { text: "Skip it and self-insure", outcomes: [
+        { text: "Take the insurance", traits: { risk: 15, resilience: 80 }, delta: -120, why: "A year of premiums and nothing went wrong. That's how insurance usually goes." },
+        { text: "Skip it and self-insure", traits: { risk: 60, resilience: 40 }, outcomes: [
           { p: 0.8, delta: 0, why: "Nothing broke. You kept the $120." },
           { p: 0.2, delta: -900, why: "You dropped it in the sea. A full replacement came out of your pocket." },
         ]},
@@ -259,39 +369,39 @@
     {
       q: "Your employer offers to match pension contributions up to 5% of salary.",
       choices: [
-        { text: "Contribute the full 5%", delta: 600, why: "Matching is free money. Your employer added $600 this year." },
-        { text: "Contribute 2% for now", delta: 240, why: "You got some of the match, but left $360 of free money on the table." },
-        { text: "Skip it, you need the cash now", delta: 0, why: "More take-home pay today, but no match at all." },
+        { text: "Contribute the full 5%", traits: { planning: 95, discipline: 75 }, delta: 600, why: "Matching is free money. Your employer added $600 this year." },
+        { text: "Contribute 2% for now", traits: { planning: 60 }, delta: 240, why: "You got some of the match, but left $360 of free money on the table." },
+        { text: "Skip it, you need the cash now", traits: { planning: 15, discipline: 40 }, delta: 0, why: "More take-home pay today, but no match at all." },
       ],
     },
     {
       q: "Friends are heading to a casino night. You've got $200 in your pocket.",
       choices: [
-        { text: "Put it all on black", outcomes: [
+        { text: "Put it all on black", traits: { risk: 95, discipline: 15 }, outcomes: [
           { p: 0.47, delta: 200, why: "Black came up. You doubled it, and wisely walked away." },
           { p: 0.53, delta: -200, why: "Red. The house edge means the odds were always slightly against you." },
         ]},
-        { text: "Set a $40 limit and have fun", outcomes: [
+        { text: "Set a $40 limit and have fun", traits: { risk: 50, discipline: 85 }, outcomes: [
           { p: 0.4, delta: 30, why: "You came out slightly ahead and stuck to your limit." },
           { p: 0.6, delta: -40, why: "You lost your $40, then stopped. That's what a limit is for." },
         ]},
-        { text: "Go along, don't gamble", delta: 0, why: "Good night out, wallet untouched." },
+        { text: "Go along, don't gamble", traits: { risk: 15, discipline: 75 }, delta: 0, why: "Good night out, wallet untouched." },
       ],
     },
     {
       q: "You get a $300 a month pay rise. You also have a $2,000 credit card balance at 24% interest.",
       choices: [
-        { text: "Upgrade your lifestyle", delta: -300, why: "Nicer takeaways, same debt. The interest kept piling up." },
-        { text: "Clear the credit card first", delta: 450, why: "Paying off 24% debt is a guaranteed 24% return. You saved $450 in interest." },
-        { text: "Split it: half debt, half fun", delta: 180, why: "You cut the interest bill, though not as fast as you could have." },
+        { text: "Upgrade your lifestyle", traits: { discipline: 15, planning: 25 }, delta: -300, why: "Nicer takeaways, same debt. The interest kept piling up." },
+        { text: "Clear the credit card first", traits: { discipline: 90, planning: 80, resilience: 75 }, delta: 450, why: "Paying off 24% debt is a guaranteed 24% return. You saved $450 in interest." },
+        { text: "Split it: half debt, half fun", traits: { discipline: 60, planning: 55 }, delta: 180, why: "You cut the interest bill, though not as fast as you could have." },
       ],
     },
     {
       q: "Your phone screen cracks. It still works. What do you do?",
       choices: [
-        { text: "Buy the newest model", delta: -1100, why: "Flagship phones cost over a grand, and the old one still worked." },
-        { text: "Get the screen repaired", delta: -150, why: "A repair costs a fraction of a new phone and keeps a working device going." },
-        { text: "Stick a protector on it and carry on", delta: 0, why: "Free. Slightly ugly, but your balance doesn't care." },
+        { text: "Buy the newest model", traits: { discipline: 10 }, delta: -1100, why: "Flagship phones cost over a grand, and the old one still worked." },
+        { text: "Get the screen repaired", traits: { discipline: 65, resilience: 60 }, delta: -150, why: "A repair costs a fraction of a new phone and keeps a working device going." },
+        { text: "Stick a protector on it and carry on", traits: { discipline: 85 }, delta: 0, why: "Free. Slightly ugly, but your balance doesn't care." },
       ],
     },
   ];
@@ -301,6 +411,20 @@
   const SHOULDERS = 'M28 200 C28 152 62 136 100 136 C138 136 172 152 172 200 Z';
   const NECKLINE = (skin) => `<path d="M86 136 Q100 149 114 136 Z" fill="${skin}"/>`;
 
+  function laurel() {
+    let s = '';
+    for (const [a0, a1] of [[195, 255], [285, 345]]) {
+      for (let i = 0; i < 6; i++) {
+        const a = a0 + ((a1 - a0) * i) / 5;
+        const r = (a * Math.PI) / 180;
+        const x = (100 + 46 * Math.cos(r)).toFixed(1), y = (86 + 46 * Math.sin(r)).toFixed(1);
+        s += `<ellipse cx="${x}" cy="${y}" rx="8" ry="3.6" transform="rotate(${(a + 90).toFixed(0)} ${x} ${y})" fill="#d4a92a" stroke="#8a6a12" stroke-width="1"/>`;
+      }
+    }
+    return s;
+  }
+
+  // `unlock` = persona level needed (2 Saver, 3 Builder, 4 Strategist). Unlocked items are free: maturity can't be bought.
   const SLOTS = [
     { id: 'outfit', name: 'Outfit', items: [
       { id: 'hoodie', name: 'Hoodie', price: 0, draw: (s) =>
@@ -323,6 +447,13 @@
         `<path d="${SHOULDERS}" fill="url(#g-chrome)"/>${NECKLINE(s)}
          <path d="M80 139 Q100 154 120 139" stroke="#7b8498" stroke-width="5" fill="none" stroke-linecap="round"/>
          <path d="M100 151 V200" stroke="#5d6578" stroke-width="2"/>` },
+      { id: 'blazer', name: "Builder's blazer", price: 0, unlock: 3, draw: (s) =>
+        `<path d="${SHOULDERS}" fill="#22346b"/>
+         <path d="M86 136 L100 168 L114 136 Z" fill="#cfe0ff"/>
+         <path d="M90 136 Q100 146 110 136 Z" fill="${s}"/>
+         <path d="M84 137 L99 170 L86 154 Z M116 137 L101 170 L114 154 Z" fill="#2e4488"/>
+         <path d="M126 164 L140 164 L133 155 Z" fill="#ffd84a"/>
+         <circle cx="100" cy="184" r="2.5" fill="#0f1a3a"/>` },
     ]},
     { id: 'hair', name: 'Hair', items: [
       { id: 'quiff', name: 'Quiff', price: 0, top: 24, draw: (c) => ({ front:
@@ -391,6 +522,7 @@
            <path d="M76 54 L72 28 L88 40 L100 22 L112 40 L128 28 L124 54 Z" fill="url(#g-gold)" stroke="#a8740a" stroke-width="1.5"/>
            <circle cx="100" cy="45" r="3.5" fill="#d22f3c"/><circle cx="86" cy="48" r="2.5" fill="#3fa9ff"/><circle cx="114" cy="48" r="2.5" fill="#3fa9ff"/>
          </g>` },
+      { id: 'laurel', name: 'Laurel wreath', price: 0, unlock: 4, draw: laurel },
     ]},
     { id: 'skin', name: 'Skin', items: [
       { id: 's1', name: 'Tone 1', price: 0, color: '#f9d7c0' },
@@ -405,6 +537,8 @@
     { id: 'bg', name: 'Backdrop', items: [
       { id: 'midnight', name: 'Midnight', price: 0, fill: 'url(#g-midnight)' },
       { id: 'mint', name: 'Mint', price: 0, fill: '#8fd9c0' },
+      { id: 'sunrise', name: 'Sunrise', price: 0, unlock: 2, fill: 'url(#g-sunrise)',
+        extra: '<circle cx="100" cy="200" r="72" fill="#fff3c4" opacity=".85"/>' },
       { id: 'sunset', name: 'Sunset', price: 150, fill: 'url(#g-sunset)',
         extra: '<circle cx="100" cy="128" r="60" fill="#ffe08a" opacity=".55"/>' },
       { id: 'grid', name: 'Neon grid', price: 350, fill: 'url(#g-night)',
@@ -423,7 +557,8 @@
     sad: 'M90 113 Q100 104 110 113',
   };
 
-  function avatarSVG(look, mood = 'neutral') {
+  // `level` (optional) draws a ring in the persona's colour, so the avatar shows maturity at a glance.
+  function avatarSVG(look, mood = 'neutral', level = null) {
     const skin = item('skin', look.skin).color;
     const hc = item('hairColor', look.hairColor).color;
     const hair = item('hair', look.hair);
@@ -435,6 +570,8 @@
     const face = eyes.hidesEyes ? '' :
       `<ellipse cx="86" cy="90" rx="4" ry="5" fill="#1f1a24"/><ellipse cx="114" cy="90" rx="4" ry="5" fill="#1f1a24"/>
        <circle cx="87.5" cy="88" r="1.4" fill="#fff"/><circle cx="115.5" cy="88" r="1.4" fill="#fff"/>`;
+    const ring = level === null ? '' :
+      `<circle cx="100" cy="100" r="95" fill="none" stroke="${PERSONAS[level].color}" stroke-width="10"/>`;
 
     return `<svg class="avatar" viewBox="0 0 200 200" role="img" aria-label="Avatar"><g clip-path="url(#c-round)">
       <rect width="200" height="200" fill="${bg.fill}"/>${bg.extra || ''}
@@ -451,6 +588,7 @@
       ${hairParts.front || ''}
       ${eyes.draw()}
       ${head.draw(hair.top)}
+      ${ring}
     </g></svg>`;
   }
 
@@ -462,16 +600,22 @@
   let roll = null;        // which outcome was rolled, for risky choices
   let owned = [];         // "slot:item" keys of bought items (free items are always owned)
   let look = { ...DEFAULT_LOOK };
+  let goal = null;        // current ambition id
+  let achieved = [];      // ambition ids reached
+  let traits = { ...START_TRAITS };
+  let bestLevel = 1;      // highest persona level reached; unlocks stay earned
+  let fx = null;          // what the last answer changed, shown with its result
   let mood = 'neutral';
   let view = 'play';
   let shopSlot = 'outfit';
-  let preview = null;     // item id being previewed (not yet bought) in shopSlot
+  let preview = null;     // item id being previewed (not yet owned) in shopSlot
   let resetArmed = false;
 
-  const isOwned = (slot, it) => it.price === 0 || owned.includes(slot + ':' + it.id);
-
+  function snapshot() {
+    return { money, index, picked, roll, owned, look, goal, achieved, traits, bestLevel, fx };
+  }
   function save() {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money, index, picked, roll, owned, look })); } catch {}
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot())); } catch {}
   }
   function loadSaved() {
     try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch { return {}; }
@@ -483,12 +627,31 @@
     if (d.roll === null || typeof d.roll === 'number') roll = d.roll ?? null;
     if (Array.isArray(d.owned)) owned = d.owned;
     if (d.look) look = { ...DEFAULT_LOOK, ...d.look };
+    if (d.goal === null || typeof d.goal === 'string') goal = d.goal ?? null;
+    if (Array.isArray(d.achieved)) achieved = d.achieved;
+    if (d.traits) traits = { ...START_TRAITS, ...d.traits };
+    if (typeof d.bestLevel === 'number') bestLevel = d.bestLevel;
+    if (d.fx !== undefined) fx = d.fx;
   }
+
+  // ================= Derived identity =================
+  const maturity = () => (traits.discipline + traits.planning + traits.resilience) / 3;
+  function levelOf() {
+    if (money < 0) return 0;
+    const m = maturity();
+    const l = m < 35 ? 0 : m < 50 ? 1 : m < 62 ? 2 : m < 75 ? 3 : 4;
+    return l === 4 && achieved.length === 0 ? 3 : l;  // Strategist needs an achieved ambition
+  }
+  const riskStyle = () => (traits.risk < 35 ? 'Cautious' : traits.risk < 65 ? 'Measured' : 'Risk-taker');
+  const isUnlocked = (it) => !it.unlock || bestLevel >= it.unlock;
+  const isOwned = (slot, it) => (it.price === 0 && isUnlocked(it)) || owned.includes(slot + ':' + it.id);
+  const goalOf = (id) => GOALS.find((g) => g.id === id);
 
   // ================= Rendering =================
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString();
   const fmtDelta = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + '$' + Math.abs(n).toLocaleString();
+  const signClass = (n) => (n > 0 ? 'up' : n < 0 ? 'down' : '');
   const resultOf = (c, r) => (c.outcomes ? c.outcomes[r ?? 0] : c);
   function rollOutcome(c) {
     if (!c.outcomes) return null;
@@ -496,7 +659,6 @@
     for (let i = 0; i < c.outcomes.length; i++) { x -= c.outcomes[i].p; if (x < 0) return i; }
     return c.outcomes.length - 1;
   }
-  const signClass = (n) => (n > 0 ? 'up' : n < 0 ? 'down' : '');
 
   function renderMoney(animate) {
     const el = $('money');
@@ -506,18 +668,101 @@
   }
 
   function renderHud() {
-    $('hud-avatar').innerHTML = avatarSVG(look, mood);
+    const lvl = levelOf();
+    $('hud-avatar').innerHTML = avatarSVG(look, mood, lvl);
     renderMoney(false);
+    const chip = $('persona-chip');
+    chip.textContent = PERSONAS[lvl].name + ' · ' + riskStyle();
+    chip.style.setProperty('--level', PERSONAS[lvl].chip || PERSONAS[lvl].color);
+
+    const g = goalOf(goal);
+    if (!g) {
+      $('goal-name').textContent = 'No ambition set';
+      $('goal-meta').textContent = '';
+      $('goal-change').textContent = 'Choose';
+      $('goal-fill').style.width = '0%';
+      $('goal-bar').setAttribute('aria-valuenow', 0);
+    } else {
+      const pct = Math.max(0, Math.min(100, Math.round((money / g.target) * 100)));
+      $('goal-name').textContent = g.name;
+      $('goal-meta').textContent = pct + '% of ' + fmt(g.target);
+      $('goal-change').textContent = 'Change';
+      $('goal-fill').style.width = pct + '%';
+      $('goal-bar').setAttribute('aria-valuenow', pct);
+    }
   }
 
   function renderTabs() {
-    $('tab-play').setAttribute('aria-selected', view === 'play');
-    $('tab-style').setAttribute('aria-selected', view === 'style');
-    $('view-play').hidden = view !== 'play';
-    $('view-style').hidden = view !== 'style';
+    for (const v of ['play', 'profile', 'style']) {
+      $('tab-' + v).setAttribute('aria-selected', view === v);
+      $('view-' + v).hidden = view !== v;
+    }
+  }
+
+  function choiceButton(text, sub) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'choice';
+    const label = document.createElement('span');
+    label.textContent = text;
+    if (sub) {
+      const s = document.createElement('span');
+      s.className = 'sub';
+      s.textContent = sub;
+      label.append(s);
+    }
+    b.append(label);
+    return b;
+  }
+
+  function renderGoalPicker() {
+    $('progress').textContent = achieved.length ? 'New ambition' : 'Before you start';
+    $('question').textContent = 'What are you saving towards?';
+    $('result').hidden = true;
+    $('next').hidden = true;
+    $('choices').replaceChildren(...GOALS.map((g) => {
+      const b = choiceButton(g.name, g.desc);
+      const t = document.createElement('span');
+      t.className = 'delta';
+      const done = achieved.includes(g.id), covered = money >= g.target;
+      t.textContent = done ? 'Achieved' : covered ? 'Already covered' : fmt(g.target);
+      b.disabled = done || covered;
+      b.append(t);
+      b.addEventListener('click', () => { goal = g.id; save(); renderAll(); });
+      return b;
+    }));
+  }
+
+  function renderFx() {
+    const fxEl = $('fx'), bannersEl = $('banners');
+    fxEl.replaceChildren();
+    bannersEl.replaceChildren();
+    if (!fx) return;
+    for (const t of TRAITS) {
+      const d = fx.traits?.[t.id];
+      if (!d) continue;
+      const s = document.createElement('span');
+      s.className = d > 0 ? 'up' : 'down';
+      s.textContent = t.name + ' ' + (d > 0 ? '+' : '−') + Math.abs(d);
+      fxEl.append(s);
+    }
+    const banner = (text, cls) => {
+      const p = document.createElement('p');
+      p.className = 'banner ' + (cls || '');
+      p.textContent = text;
+      bannersEl.append(p);
+    };
+    if (fx.goalHit) banner('Ambition achieved: ' + fx.goalHit + '. Pick your next one after this question.', 'win');
+    if (fx.shift) {
+      const up = fx.shift.to > fx.shift.from;
+      banner((up ? 'Level up: ' : 'Slipped back: ') + PERSONAS[fx.shift.from].name + ' → ' + PERSONAS[fx.shift.to].name, up ? '' : 'slip');
+    }
+    if (fx.unlocked?.length) banner('Unlocked in the shop: ' + fx.unlocked.join(', ') + '.', 'win');
   }
 
   function renderPlay() {
+    if (goal === null && picked === null) { renderGoalPicker(); return; }
+
     const choicesEl = $('choices');
     choicesEl.replaceChildren();
     const resultEl = $('result'), deltaEl = $('result-delta'), nextBtn = $('next');
@@ -528,7 +773,9 @@
       resultEl.hidden = false;
       deltaEl.textContent = '';
       $('odds').hidden = true;
-      $('explain').textContent = 'Spend it in the Style shop, or play another round to earn more.';
+      $('explain').textContent = 'Check your Profile to see how your choices shaped you, or play another round.';
+      fx = null;
+      renderFx();
       nextBtn.textContent = 'Play another round';
       nextBtn.hidden = false;
       return;
@@ -539,18 +786,13 @@
     $('question').textContent = q.q;
 
     q.choices.forEach((c, i) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'choice';
-      const label = document.createElement('span');
-      label.textContent = c.text;
-      b.append(label);
+      const b = choiceButton(c.text);
       if (picked !== null) {
         b.disabled = true;
         if (i === picked) {
           b.classList.add('picked');
-          const d = document.createElement('span');
           const r = resultOf(c, roll);
+          const d = document.createElement('span');
           d.className = 'delta ' + signClass(r.delta);
           d.textContent = fmtDelta(r.delta);
           b.append(d);
@@ -575,17 +817,58 @@
         $('odds').textContent = 'Risky pick. The odds were: ' +
           c.outcomes.map((o) => Math.round(o.p * 100) + '% chance of ' + fmtDelta(o.delta)).join(', ') + '.';
       }
+      renderFx();
       nextBtn.textContent = index + 1 < QUESTIONS.length ? 'Next question' : 'Finish round';
       nextBtn.hidden = false;
     }
   }
 
+  function renderProfile() {
+    const lvl = levelOf();
+    const p = PERSONAS[lvl];
+    $('p-avatar').innerHTML = avatarSVG(look, mood, lvl);
+    $('p-name').textContent = p.name;
+    $('p-risk').textContent = riskStyle() + ' with risk';
+    $('p-blurb').textContent = p.blurb;
+    $('p-next').textContent = p.next;
+
+    $('p-ladder').replaceChildren(...PERSONAS.map((x, i) => {
+      const s = document.createElement('span');
+      if (i <= lvl) s.style.background = x.chip || x.color;
+      return s;
+    }));
+    $('p-ladder-labels').replaceChildren(...PERSONAS.map((x, i) => {
+      const s = document.createElement('span');
+      s.textContent = x.name;
+      if (i === lvl) s.className = 'on';
+      return s;
+    }));
+
+    $('p-traits').replaceChildren(...TRAITS.map((t) => {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `<div class="trait-row"><span></span><span class="meta"></span></div>
+        <div class="bar"><span></span></div>`;
+      wrap.querySelector('.trait-row span').textContent = t.name;
+      wrap.querySelector('.meta').textContent = traits[t.id] + ' / 100';
+      wrap.querySelector('.bar span').style.width = traits[t.id] + '%';
+      return wrap;
+    }));
+
+    const done = GOALS.filter((g) => achieved.includes(g.id));
+    $('p-goals').replaceChildren(...done.map((g) => {
+      const li = document.createElement('li');
+      li.textContent = g.name + ' (' + fmt(g.target) + ')';
+      return li;
+    }));
+    $('p-goals').hidden = !done.length;
+    $('p-goals-empty').hidden = !!done.length;
+  }
+
   function renderStyle() {
     const shown = preview ? { ...look, [shopSlot]: preview } : look;
-    $('stage-avatar').innerHTML = avatarSVG(shown, mood);
+    $('stage-avatar').innerHTML = avatarSVG(shown, mood, levelOf());
 
-    const slotsEl = $('slots');
-    slotsEl.replaceChildren(...SLOTS.map((s) => {
+    $('slots').replaceChildren(...SLOTS.map((s) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.textContent = s.name;
@@ -594,18 +877,24 @@
       return b;
     }));
 
-    const grid = $('items');
-    grid.replaceChildren(...SLOT[shopSlot].items.map((it) => {
+    $('items').replaceChildren(...SLOT[shopSlot].items.map((it) => {
       const b = document.createElement('button');
       b.type = 'button';
       const have = isOwned(shopSlot, it);
       const wearing = look[shopSlot] === it.id;
+      const levelLocked = !isUnlocked(it);
+      let tag;
+      if (wearing) tag = 'Wearing';
+      else if (levelLocked) tag = 'Reach ' + PERSONAS[it.unlock].name;
+      else if (it.unlock) tag = 'Earned';
+      else if (have) tag = it.price ? 'Owned' : 'Free';
+      else tag = fmt(it.price);
       b.className = 'tile' + (wearing ? ' wearing' : '') + (preview === it.id ? ' selected' : '') +
-        (!have && it.price > money ? ' locked' : '');
-      const tag = wearing ? 'Wearing' : have ? (it.price ? 'Owned' : 'Free') : fmt(it.price);
+        (levelLocked || (!have && it.price > money) ? ' locked' : '') + (it.unlock && !levelLocked && !wearing ? ' earned' : '');
       b.innerHTML = `<div class="avatar-wrap">${avatarSVG({ ...look, [shopSlot]: it.id })}</div>
-        <span class="name"></span><span class="tag">${tag}</span>`;
+        <span class="name"></span><span class="tag"></span>`;
       b.querySelector('.name').textContent = it.name;
+      b.querySelector('.tag').textContent = tag;
       b.addEventListener('click', () => pickItem(it));
       return b;
     }));
@@ -615,6 +904,12 @@
     const it = item(shopSlot, preview);
     bar.hidden = false;
     const buy = $('buy');
+    if (!isUnlocked(it)) {
+      buy.textContent = 'Locked';
+      buy.disabled = true;
+      $('buy-note').textContent = 'Reach ' + PERSONAS[it.unlock].name + ' to unlock this. Maturity can\'t be bought.';
+      return;
+    }
     buy.textContent = 'Buy ' + it.name + ' for ' + fmt(it.price);
     buy.disabled = money < it.price;
     $('buy-note').textContent = money < it.price
@@ -626,18 +921,48 @@
     renderHud();
     renderTabs();
     renderPlay();
+    renderProfile();
     renderStyle();
   }
 
   // ================= Actions =================
   function choose(i) {
     if (picked !== null) return;
-    picked = i;
+    const before = levelOf();
     const c = QUESTIONS[index].choices[i];
+    picked = i;
     roll = rollOutcome(c);
     const d = resultOf(c, roll).delta;
     money += d;
     mood = d > 0 ? 'happy' : d < 0 ? 'sad' : 'neutral';
+
+    // Traits follow the behaviour, not the luck.
+    const traitFx = {};
+    for (const [k, target] of Object.entries(c.traits || {})) {
+      const next = Math.round(traits[k] + (target - traits[k]) * TRAIT_RATE);
+      if (next !== traits[k]) traitFx[k] = next - traits[k];
+      traits[k] = next;
+    }
+
+    let goalHit = null;
+    const g = goalOf(goal);
+    if (g && money >= g.target) {
+      if (!achieved.includes(g.id)) achieved.push(g.id);
+      goalHit = g.name;
+      goal = null;
+    }
+
+    const after = levelOf();
+    const unlocked = [];
+    if (after > bestLevel) {
+      for (const s of SLOTS) for (const it of s.items) {
+        if (it.unlock && it.unlock > bestLevel && it.unlock <= after) unlocked.push(it.name);
+      }
+      bestLevel = after;
+    }
+    if (after > before) mood = 'happy';
+    fx = { traits: traitFx, shift: after !== before ? { from: before, to: after } : null, unlocked, goalHit };
+
     save();
     renderAll();
     renderMoney(true);
@@ -648,10 +973,18 @@
     index = index >= QUESTIONS.length ? 0 : index + 1;  // new round keeps your balance
     picked = null;
     roll = null;
+    fx = null;
     mood = 'neutral';
     save();
     renderAll();
     window.scrollTo({ top: 0 });
+  });
+
+  $('goal-change').addEventListener('click', () => {
+    goal = null;
+    view = 'play';
+    save();
+    renderAll();
   });
 
   function pickItem(it) {
@@ -663,21 +996,21 @@
       preview = preview === it.id ? null : it.id;
     }
     renderHud();
+    renderProfile();
     renderStyle();
   }
 
   $('buy').addEventListener('click', () => {
     if (!preview) return;
     const it = item(shopSlot, preview);
-    if (money < it.price) return;
+    if (!isUnlocked(it) || money < it.price) return;
     money -= it.price;
     owned.push(shopSlot + ':' + it.id);
     look[shopSlot] = it.id;
     preview = null;
     mood = 'happy';
     save();
-    renderHud();
-    renderStyle();
+    renderAll();
     renderMoney(true);
   });
   $('cancel').addEventListener('click', () => { preview = null; renderStyle(); });
@@ -686,24 +1019,27 @@
     view = v;
     preview = null;
     renderTabs();
+    renderProfile();
     renderStyle();
   }
   $('tab-play').addEventListener('click', () => setView('play'));
+  $('tab-profile').addEventListener('click', () => setView('profile'));
   $('tab-style').addEventListener('click', () => setView('style'));
-  $('hud-avatar').addEventListener('click', () => setView('style'));
+  $('hud-avatar').addEventListener('click', () => setView('profile'));
 
   $('reset').addEventListener('click', () => {
     const btn = $('reset');
     if (!resetArmed) {
       resetArmed = true;
-      btn.textContent = 'Tap again to wipe your balance and items';
+      btn.textContent = 'Tap again to wipe everything';
       setTimeout(() => { resetArmed = false; btn.textContent = 'Reset game'; }, 4000);
       return;
     }
     resetArmed = false;
     btn.textContent = 'Reset game';
     money = START_MONEY; index = 0; picked = null; roll = null; owned = []; look = { ...DEFAULT_LOOK };
-    mood = 'neutral'; preview = null;
+    goal = null; achieved = []; traits = { ...START_TRAITS }; bestLevel = 1; fx = null;
+    mood = 'neutral'; preview = null; view = 'play';
     save();
     renderAll();
   });
@@ -712,8 +1048,9 @@
   function start(data) {
     applyState(loadSaved());
     if (data && typeof data.money === 'number') applyState(data);
+    bestLevel = Math.max(bestLevel, levelOf());
     renderAll();
   }
-  window.claude?.hot?.snapshot?.(() => ({ money, index, picked, roll, owned, look }));
+  window.claude?.hot?.snapshot?.(snapshot);
   window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 </script>
