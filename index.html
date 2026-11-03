@@ -3,133 +3,309 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <title>UI Exciter</title>
 <style>
-  /* Layout: one screen, counter above a single big tap target, centred in the thumb zone */
+  /* Layout: one column, balance on top, question card below, choices stacked for thumbs */
   :root {
     --bg: #eef1f6;
     --fg: #1b2230;
     --muted: #677189;
-    --box: #2f6bff;
-    --box-edge: #1d47b8;
-    --box-fg: #ffffff;
+    --card: #ffffff;
+    --line: #d6dbe6;
+    --accent: #2f6bff;
+    --accent-edge: #1d47b8;
+    --up: #13804b;
+    --down: #c43232;
     --font-display: "Bungee", "Arial Black", system-ui, sans-serif;
     --font-body: "DM Sans", system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #111520; --fg: #e8ecf5; --muted: #8a93a8;
-      --box: #4b7fff; --box-edge: #2a4fb0; --box-fg: #ffffff;
+      --bg: #111520; --fg: #e8ecf5; --muted: #8a93a8; --card: #1a2030; --line: #2c3448;
+      --accent: #4b7fff; --accent-edge: #2a4fb0; --up: #3ccf86; --down: #ff6b6b;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #111520; --fg: #e8ecf5; --muted: #8a93a8;
-    --box: #4b7fff; --box-edge: #2a4fb0; --box-fg: #ffffff;
+    --bg: #111520; --fg: #e8ecf5; --muted: #8a93a8; --card: #1a2030; --line: #2c3448;
+    --accent: #4b7fff; --accent-edge: #2a4fb0; --up: #3ccf86; --down: #ff6b6b;
     color-scheme: dark;
   }
 
-  html, body { height: 100%; }
+  html, body { min-height: 100%; }
   body {
     margin: 0;
     background: var(--bg);
     color: var(--fg);
     font-family: var(--font-body);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2rem;
+    font-size: 16px;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
     padding-block: 24px;
     box-sizing: border-box;
-    user-select: none;
-    -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
-    overflow: hidden;
+  }
+  main {
+    max-width: 480px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
   }
 
-  .score { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+  .score { display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .label {
-    font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+    font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
   }
-  #count {
+  #money {
     font-family: var(--font-display);
-    font-size: clamp(3.5rem, 18vw, 7rem);
+    font-size: clamp(2.75rem, 14vw, 5rem);
     line-height: 1;
     font-variant-numeric: tabular-nums;
   }
+  #money.neg { color: var(--down); }
+  #money.bump { animation: bump 180ms ease-out; }
+  @keyframes bump { 50% { transform: scale(1.1); } }
 
-  #clicker {
-    width: min(70vw, 260px);
-    aspect-ratio: 1;
-    max-width: 100%;
-    border: none;
-    border-radius: 20px;
-    background: var(--box);
-    color: var(--box-fg);
-    font-family: var(--font-display);
-    font-size: 1.6rem;
-    box-shadow: 0 10px 0 var(--box-edge);
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  #progress { margin: 0; }
+  #question {
+    margin: 0;
+    font-size: 1.2rem;
+    line-height: 1.35;
+    font-weight: 600;
+    text-wrap: balance;
+  }
+
+  #choices { display: flex; flex-direction: column; gap: 10px; }
+  .choice {
+    font: inherit;
+    text-align: left;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 2px solid var(--line);
+    background: var(--bg);
+    color: var(--fg);
     cursor: pointer;
     touch-action: manipulation;
-    transition: transform 60ms ease-out, box-shadow 60ms ease-out;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
   }
-  #clicker.down { transform: translateY(8px); box-shadow: 0 2px 0 var(--box-edge); }
-  #clicker:focus-visible { outline: 3px solid var(--fg); outline-offset: 6px; }
+  .choice:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .choice:disabled { cursor: default; opacity: 0.45; }
+  .choice.picked { opacity: 1; border-color: var(--accent); }
+  .choice .delta { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-  #count.bump { animation: bump 140ms ease-out; }
-  @keyframes bump { 50% { transform: scale(1.12); } }
+  #result { display: flex; flex-direction: column; gap: 8px; }
+  #delta {
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  #explain { margin: 0; line-height: 1.5; }
+
+  .primary {
+    font: inherit;
+    font-weight: 700;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 5px 0 var(--accent-edge);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .primary:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--accent-edge); }
+  .primary:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+
   @media (prefers-reduced-motion: reduce) {
-    #count.bump { animation: none; }
-    #clicker { transition: none; }
+    #money.bump { animation: none; }
   }
 </style>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=DM+Sans:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=DM+Sans:wght@400;600;700&display=swap">
 
-<div class="score">
-  <span class="label">Clicks</span>
-  <span id="count">0</span>
-</div>
-<button id="clicker" type="button" aria-label="Click to add one">TAP</button>
+<main>
+  <div class="score">
+    <span class="label">Balance</span>
+    <span id="money">$0</span>
+  </div>
+
+  <section class="card" aria-live="polite">
+    <p id="progress" class="label"></p>
+    <h1 id="question"></h1>
+    <div id="choices"></div>
+    <div id="result" hidden>
+      <span id="delta"></span>
+      <p id="explain"></p>
+    </div>
+    <button id="next" class="primary" type="button" hidden>Next question</button>
+  </section>
+</main>
 
 <script>
-  const countEl = document.getElementById('count');
-  const btn = document.getElementById('clicker');
-  const KEY = 'ui-exciter-count';
-  let count = 0;
+  // ---- Game data: edit freely. `delta` is hidden until the player picks. ----
+  const START_MONEY = 1000;
+  const QUESTIONS = [
+    {
+      q: "Your phone screen cracks. It still works. What do you do?",
+      choices: [
+        { text: "Buy the newest model", delta: -1100, why: "Flagship phones cost over a grand, and the old one still worked." },
+        { text: "Get the screen repaired", delta: -150, why: "A repair costs a fraction of a new phone and keeps a working device going." },
+        { text: "Stick a protector on it and carry on", delta: 0, why: "Free. Slightly ugly, but your balance doesn't care." },
+      ],
+    },
+    {
+      q: "A friend offers to sell you their barely used bike for $200. You don't currently cycle.",
+      choices: [
+        { text: "Buy it, you'll start cycling", delta: -200, why: "Most impulse fitness purchases end up in the hallway. The bike did too." },
+        { text: "Buy it and resell it online", delta: 120, why: "Similar bikes list for around $320. A quick flip netted you $120." },
+        { text: "Politely pass", delta: 0, why: "Nothing gained, nothing lost." },
+      ],
+    },
+    {
+      q: "Your employer offers to match pension contributions up to 5% of salary.",
+      choices: [
+        { text: "Contribute the full 5%", delta: 600, why: "Matching is free money. Your employer added $600 this year." },
+        { text: "Contribute 2% for now", delta: 240, why: "You got some of the match, but left $360 of free money on the table." },
+        { text: "Skip it, you need the cash now", delta: 0, why: "More take-home pay today, but no match at all." },
+      ],
+    },
+    {
+      q: "Your car insurance renewal quote has gone up by $300.",
+      choices: [
+        { text: "Accept the renewal", delta: -300, why: "Loyalty rarely pays with insurers. You paid the full increase." },
+        { text: "Shop around and switch", delta: 150, why: "A comparable policy elsewhere was $150 cheaper than last year's price." },
+        { text: "Cancel and drive uninsured", delta: -2500, why: "You got stopped. The fine and the impound fees came to $2,500." },
+      ],
+    },
+    {
+      q: "You've got a free Saturday.",
+      choices: [
+        { text: "Weekend shopping trip", delta: -250, why: "Nothing you needed, all of it on sale." },
+        { text: "Sell clutter you don't use", delta: 180, why: "Old games, a lamp and a jacket went for $180." },
+        { text: "Pick up a paid shift", delta: 140, why: "Eight hours of work, $140 after tax." },
+        { text: "Stay in and rest", delta: 0, why: "Cheap and restful." },
+      ],
+    },
+  ];
 
-  function load() {
-    try { return parseInt(localStorage.getItem(KEY), 10) || 0; } catch { return 0; }
-  }
-  function save() {
-    try { localStorage.setItem(KEY, String(count)); } catch {}
-  }
-  function render() { countEl.textContent = count.toLocaleString(); }
+  // ---- Elements ----
+  const $ = (id) => document.getElementById(id);
+  const moneyEl = $('money'), progressEl = $('progress'), questionEl = $('question');
+  const choicesEl = $('choices'), resultEl = $('result'), deltaEl = $('delta');
+  const explainEl = $('explain'), nextBtn = $('next');
 
-  function click() {
-    count += 1;
+  // ---- State ----
+  let money = START_MONEY;
+  let index = 0;      // current question
+  let picked = null;  // index of chosen answer, or null
+
+  const fmt = (n) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString();
+  const fmtDelta = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + '$' + Math.abs(n).toLocaleString();
+
+  function renderMoney(animate) {
+    moneyEl.textContent = fmt(money);
+    moneyEl.classList.toggle('neg', money < 0);
+    if (animate) {
+      moneyEl.classList.remove('bump');
+      void moneyEl.offsetWidth;
+      moneyEl.classList.add('bump');
+    }
+  }
+
+  function render() {
+    renderMoney(false);
+    choicesEl.replaceChildren();
+
+    if (index >= QUESTIONS.length) {
+      progressEl.textContent = 'Game over';
+      questionEl.textContent = 'You finished with ' + fmt(money) + '.';
+      const diff = money - START_MONEY;
+      resultEl.hidden = false;
+      deltaEl.textContent = fmtDelta(diff);
+      deltaEl.className = diff > 0 ? 'up' : diff < 0 ? 'down' : '';
+      explainEl.textContent = 'You started with ' + fmt(START_MONEY) + '.';
+      nextBtn.textContent = 'Play again';
+      nextBtn.hidden = false;
+      return;
+    }
+
+    const item = QUESTIONS[index];
+    progressEl.textContent = 'Question ' + (index + 1) + ' of ' + QUESTIONS.length;
+    questionEl.textContent = item.q;
+
+    item.choices.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'choice';
+      const label = document.createElement('span');
+      label.textContent = c.text;
+      b.append(label);
+      if (picked !== null) {
+        b.disabled = true;
+        if (i === picked) {
+          b.classList.add('picked');
+          const d = document.createElement('span');
+          d.className = 'delta ' + (c.delta > 0 ? 'up' : c.delta < 0 ? 'down' : '');
+          d.textContent = fmtDelta(c.delta);
+          b.append(d);
+        }
+      }
+      b.addEventListener('click', () => choose(i));
+      choicesEl.append(b);
+    });
+
+    if (picked === null) {
+      resultEl.hidden = true;
+      nextBtn.hidden = true;
+    } else {
+      const c = item.choices[picked];
+      resultEl.hidden = false;
+      deltaEl.textContent = fmtDelta(c.delta);
+      deltaEl.className = c.delta > 0 ? 'up' : c.delta < 0 ? 'down' : '';
+      explainEl.textContent = c.why;
+      nextBtn.textContent = index + 1 < QUESTIONS.length ? 'Next question' : 'See result';
+      nextBtn.hidden = false;
+    }
+  }
+
+  function choose(i) {
+    if (picked !== null) return;
+    picked = i;
+    money += QUESTIONS[index].choices[i].delta;
     render();
-    save();
-    countEl.classList.remove('bump');
-    void countEl.offsetWidth; // restart animation
-    countEl.classList.add('bump');
+    renderMoney(true);
+    nextBtn.focus({ preventScroll: true });
   }
 
-  // pointerdown fires immediately on touch (no tap delay); keyboard still works via click
-  btn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    btn.classList.add('down');
-    click();
+  nextBtn.addEventListener('click', () => {
+    if (index >= QUESTIONS.length) {
+      money = START_MONEY; index = 0;
+    } else {
+      index += 1;
+    }
+    picked = null;
+    render();
+    window.scrollTo({ top: 0 });
   });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) =>
-    btn.addEventListener(t, () => btn.classList.remove('down'))
-  );
-  btn.addEventListener('click', (e) => { if (e.detail === 0) click(); }); // keyboard Enter/Space
 
   function start(data) {
-    count = typeof data.count === 'number' ? data.count : load();
+    if (typeof data.money === 'number') {
+      money = data.money; index = data.index; picked = data.picked;
+    }
     render();
   }
-  window.claude?.hot?.snapshot?.(() => ({ count }));
+  window.claude?.hot?.snapshot?.(() => ({ money, index, picked }));
   window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 </script>
