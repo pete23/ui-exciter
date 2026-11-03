@@ -122,6 +122,13 @@
   .banner.slip { border-color: var(--down); }
   .banner.win { border-color: var(--up); }
 
+  /* Onboarding reveal */
+  .reveal { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .reveal .avatar-wrap { width: min(50vw, 180px); aspect-ratio: 1; max-width: 100%; }
+  .reveal .big { font-family: var(--font-display); font-size: 1.6rem; margin: 0; }
+  .reveal p { margin: 0; line-height: 1.5; max-width: 36ch; }
+  .reveal .chipline { font-weight: 700; color: var(--muted); }
+
   .primary {
     font-weight: 700; padding: 14px; border: none; border-radius: 12px;
     background: var(--accent); color: #fff; box-shadow: 0 5px 0 var(--accent-edge); cursor: pointer;
@@ -139,7 +146,7 @@
   #p-next { color: var(--muted); font-size: 0.9rem; }
   .ladder { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
   .ladder span { height: 8px; border-radius: 999px; background: var(--track); }
-  .ladder-labels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 0.7rem; color: var(--muted); text-align: center; }
+  .ladder-labels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 0.7rem; color: var(--muted); text-align: center; margin-top: 6px; }
   .ladder-labels .on { color: var(--fg); font-weight: 700; }
   .traits { display: flex; flex-direction: column; gap: 12px; }
   .trait-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 4px; }
@@ -213,7 +220,7 @@
     </div>
   </div>
 
-  <div class="goal">
+  <div class="goal" id="goal-block">
     <div class="goal-row">
       <strong id="goal-name"></strong>
       <span><span id="goal-meta" class="meta"></span><button id="goal-change" class="link" type="button">Change</button></span>
@@ -221,7 +228,7 @@
     <div class="bar" role="progressbar" aria-label="Ambition progress" aria-valuemin="0" aria-valuemax="100" id="goal-bar"><span id="goal-fill"></span></div>
   </div>
 
-  <div class="tabs" role="tablist">
+  <div class="tabs" role="tablist" id="tabs">
     <button id="tab-play" type="button" role="tab" aria-selected="true">Play</button>
     <button id="tab-profile" type="button" role="tab" aria-selected="false">Profile</button>
     <button id="tab-style" type="button" role="tab" aria-selected="false">Shop</button>
@@ -250,7 +257,7 @@
     </div>
     <div>
       <div class="ladder" id="p-ladder"></div>
-      <div class="ladder-labels" id="p-ladder-labels" style="margin-top:6px"></div>
+      <div class="ladder-labels" id="p-ladder-labels"></div>
     </div>
     <p id="p-next"></p>
     <h3 class="label section-title">Financial traits</h3>
@@ -299,13 +306,40 @@
   const START_TRAITS = { risk: 50, discipline: 45, planning: 45, resilience: 45 };
   const TRAIT_RATE = 0.3;
 
+  // Two setup questions. Each answer sets starting traits directly and a `band` (0 low, 1 mid, 2 high)
+  // that, together, picks the player's animal.
+  const SETUP = [
+    {
+      q: "Your savings drop 20% in a month. How do you feel?",
+      choices: [
+        { text: "Panicked. I'd pull everything out", band: 0, traits: { risk: 20, resilience: 30 } },
+        { text: "Uneasy, but I'd wait it out", band: 1, traits: { risk: 50, resilience: 55 } },
+        { text: "Excited. I'd buy more while it's cheap", band: 2, traits: { risk: 85, resilience: 60 } },
+      ],
+    },
+    {
+      q: "Payday arrives. What usually happens?",
+      choices: [
+        { text: "It's mostly gone within a week", band: 0, traits: { discipline: 25, planning: 25 } },
+        { text: "Bills first, then I spend what's left", band: 1, traits: { discipline: 50, planning: 40 } },
+        { text: "Savings go out first, then I spend", band: 2, traits: { discipline: 65, planning: 60 } },
+      ],
+    },
+  ];
+  // ANIMAL_FOR[riskBand][disciplineBand]
+  const ANIMAL_FOR = [
+    ['bunny', 'panda', 'bear'],
+    ['bunny', 'panda', 'cat'],
+    ['frog', 'fox', 'fox'],
+  ];
+
   // Maturity ladder. Level comes from discipline, planning and resilience; risk is a separate axis.
   const PERSONAS = [
     { name: 'Firefighter', color: '#ff5a5a', blurb: 'Putting out fires. No buffer yet, so every surprise hurts.',
       next: 'Get your balance positive and choose options that protect you from shocks.' },
     { name: 'Enjoyer', color: '#ffb84a', blurb: 'Earning and spending. Life is good today, less so for future you.',
       next: 'Show some spending discipline and think a little further ahead to become a Saver.' },
-    { name: 'Saver', color: '#2fbf8a', blurb: 'A buffer in place and expensive debt under control. Plays it safe.',
+    { name: 'Saver', color: '#2fbf8a', blurb: 'A buffer in place and expensive debt under control.',
       next: 'Put money to work for the long term to become a Builder.' },
     { name: 'Builder', color: '#4b7fff', blurb: 'Investing regularly, with goals that have dates on them.',
       next: 'Keep making strong long-term choices and achieve an ambition to become a Strategist.' },
@@ -406,10 +440,47 @@
     },
   ];
 
-  // ================= Avatar parts =================
-  // Shoulders shape shared by every outfit.
+  // ================= Avatar: animals =================
+  // Each animal: natural fur colours (fur, dark, light), optional head shape / eye placement,
+  // `back` (ears, drawn behind the head) and `face` (markings on the head).
+  const ANIMALS = [
+    { id: 'fox', name: 'Fox', price: 0, fur: '#ff7a3d', dark: '#c4521f', light: '#fff8f0', nose: '#2a1a1a',
+      tagline: 'Bold and clever. You take risks, but you think them through.',
+      back: (f) => `<path d="M54 80 L56 26 L94 54 Z M146 80 L144 26 L106 54 Z" fill="${f}"/>
+        <path d="M60 68 L61 38 L84 56 Z M140 68 L139 38 L116 56 Z" fill="#3a2626"/>`,
+      face: (f, d, l) => `<path d="M54 94 Q60 130 100 133 Q140 130 146 94 Q130 112 100 108 Q70 112 54 94 Z" fill="${l}"/>` },
+    { id: 'cat', name: 'Cat', price: 0, fur: '#f2a65a', dark: '#c97a30', light: '#fff6ea', nose: '#ff8fa3',
+      tagline: 'Independent and careful. You plan ahead and pick your moments.',
+      back: (f) => `<path d="M58 76 L62 32 L94 56 Z M142 76 L138 32 L106 56 Z" fill="${f}"/>
+        <path d="M65 66 L67 44 L84 57 Z M135 66 L133 44 L116 57 Z" fill="#ffb3c1"/>`,
+      face: (f, d, l) => `<path d="M92 50 L94 62 M100 48 V62 M108 50 L106 62" stroke="${d}" stroke-width="4" stroke-linecap="round"/>
+        <ellipse cx="100" cy="108" rx="17" ry="11" fill="${l}"/>`,
+      front: () => `<path d="M70 104 L50 100 M70 109 L50 111 M130 104 L150 100 M130 109 L150 111" stroke="#2a1a14" stroke-opacity=".35" stroke-width="1.8" stroke-linecap="round"/>` },
+    { id: 'bear', name: 'Bear', price: 0, fur: '#a8714a', dark: '#7a4f30', light: '#e8c39e', nose: '#3a2418',
+      tagline: 'Steady and prepared. You save for winter and avoid nasty surprises.',
+      back: (f, d, l) => `<circle cx="60" cy="56" r="17" fill="${f}"/><circle cx="140" cy="56" r="17" fill="${f}"/>
+        <circle cx="60" cy="56" r="9" fill="${l}"/><circle cx="140" cy="56" r="9" fill="${l}"/>`,
+      face: (f, d, l) => `<ellipse cx="100" cy="108" rx="21" ry="15" fill="${l}"/>` },
+    { id: 'panda', name: 'Panda', price: 0, fur: '#26262b', dark: '#111114', light: '#ffffff', nose: '#26262b',
+      headColor: '#ffffff', eyeRing: true,
+      tagline: 'Easy-going and balanced. Not too risky, not too strict.',
+      back: (f) => `<circle cx="62" cy="54" r="16" fill="${f}"/><circle cx="138" cy="54" r="16" fill="${f}"/>`,
+      face: (f) => `<ellipse cx="82" cy="93" rx="12" ry="15" transform="rotate(25 82 93)" fill="${f}"/>
+        <ellipse cx="118" cy="93" rx="12" ry="15" transform="rotate(-25 118 93)" fill="${f}"/>` },
+    { id: 'bunny', name: 'Bunny', price: 0, fur: '#f4efe9', dark: '#d9cfc4', light: '#ffffff', nose: '#ff8fa3',
+      tagline: 'Lives in the moment. Quick to spend, quick to bounce back.',
+      back: (f) => `<g transform="rotate(-12 78 44)"><ellipse cx="78" cy="40" rx="12" ry="34" fill="${f}"/><ellipse cx="78" cy="42" rx="6" ry="25" fill="#ffc2d1"/></g>
+        <g transform="rotate(12 122 44)"><ellipse cx="122" cy="40" rx="12" ry="34" fill="${f}"/><ellipse cx="122" cy="42" rx="6" ry="25" fill="#ffc2d1"/></g>`,
+      face: () => '' },
+    { id: 'frog', name: 'Frog', price: 0, fur: '#7ccf6b', dark: '#4f9a42', light: '#d5f3c4', nose: 'dots',
+      head: { cy: 100, rx: 52, ry: 38 }, eyeY: 62, eyeDX: 22, eyeRing: true, hatDY: -16, mouthDY: 4,
+      tagline: 'A big leaper. You jump at chances, sometimes before looking.',
+      back: (f) => `<circle cx="78" cy="64" r="18" fill="${f}"/><circle cx="122" cy="64" r="18" fill="${f}"/>`,
+      face: (f, d, l) => `<ellipse cx="100" cy="116" rx="32" ry="16" fill="${l}"/>` },
+  ];
+
   const SHOULDERS = 'M28 200 C28 152 62 136 100 136 C138 136 172 152 172 200 Z';
-  const NECKLINE = (skin) => `<path d="M86 136 Q100 149 114 136 Z" fill="${skin}"/>`;
+  const NECKLINE = (c) => `<path d="M86 136 Q100 149 114 136 Z" fill="${c}"/>`;
 
   function laurel() {
     let s = '';
@@ -417,7 +488,7 @@
       for (let i = 0; i < 6; i++) {
         const a = a0 + ((a1 - a0) * i) / 5;
         const r = (a * Math.PI) / 180;
-        const x = (100 + 46 * Math.cos(r)).toFixed(1), y = (86 + 46 * Math.sin(r)).toFixed(1);
+        const x = (100 + 50 * Math.cos(r)).toFixed(1), y = (90 + 50 * Math.sin(r)).toFixed(1);
         s += `<ellipse cx="${x}" cy="${y}" rx="8" ry="3.6" transform="rotate(${(a + 90).toFixed(0)} ${x} ${y})" fill="#d4a92a" stroke="#8a6a12" stroke-width="1"/>`;
       }
     }
@@ -426,6 +497,17 @@
 
   // `unlock` = persona level needed (2 Saver, 3 Builder, 4 Strategist). Unlocked items are free: maturity can't be bought.
   const SLOTS = [
+    { id: 'species', name: 'Animal', items: ANIMALS },
+    { id: 'fur', name: 'Fur', items: [
+      { id: 'natural', name: 'Natural', price: 0 },
+      { id: 'cocoa', name: 'Cocoa', price: 0, color: '#8a5a3c', dark: '#5e3b26', light: '#e2c4a8' },
+      { id: 'snow', name: 'Snow', price: 0, color: '#f4f4f7', dark: '#c9cbd6', light: '#ffffff' },
+      { id: 'midnight', name: 'Midnight', price: 150, color: '#3b3f55', dark: '#25283a', light: '#9aa0bb' },
+      { id: 'pink', name: 'Bubblegum', price: 150, color: '#ff9ec7', dark: '#e0679f', light: '#ffe0ee' },
+      { id: 'sky', name: 'Sky', price: 150, color: '#8fc8ff', dark: '#5a9be0', light: '#e3f2ff' },
+      { id: 'lilac', name: 'Lilac', price: 200, color: '#c7a4ff', dark: '#9a6fe0', light: '#efe5ff' },
+      { id: 'golden', name: 'Golden', price: 600, color: 'url(#g-gold)', dark: '#a8740a', light: '#fff1c2' },
+    ]},
     { id: 'outfit', name: 'Outfit', items: [
       { id: 'hoodie', name: 'Hoodie', price: 0, draw: (s) =>
         `<path d="${SHOULDERS}" fill="#2b2f3a"/>${NECKLINE(s)}
@@ -455,84 +537,44 @@
          <path d="M126 164 L140 164 L133 155 Z" fill="#ffd84a"/>
          <circle cx="100" cy="184" r="2.5" fill="#0f1a3a"/>` },
     ]},
-    { id: 'hair', name: 'Hair', items: [
-      { id: 'quiff', name: 'Quiff', price: 0, top: 24, draw: (c) => ({ front:
-        `<path d="M63 88 C58 56 76 44 98 44 C124 44 142 56 137 88 C132 70 118 62 100 63 C82 64 68 72 63 88 Z" fill="${c}"/>
-         <path d="M84 54 C88 22 132 16 150 34 C132 30 116 36 108 58 Z" fill="${c}"/>` }) },
-      { id: 'buzz', name: 'Buzz cut', price: 0, top: 50, draw: (c) => ({ front:
-        `<path d="M64 86 C62 50 138 50 136 86 C128 66 72 66 64 86 Z" fill="${c}"/>` }) },
-      { id: 'long', name: 'Long', price: 150, top: 48, draw: (c) => ({
-        back: `<path d="M62 84 C58 40 142 40 138 84 L144 150 C130 158 70 158 56 150 Z" fill="${c}"/>`,
-        front: `<path d="M64 88 C60 52 140 52 136 88 C126 64 104 58 84 70 C76 76 68 80 64 88 Z" fill="${c}"/>` }) },
-      { id: 'spikes', name: 'Spikes', price: 180, top: 30, draw: (c) => ({ front:
-        `<path d="M63 86 L58 58 L72 64 L72 40 L86 54 L96 30 L106 52 L120 34 L124 56 L140 46 L137 70 L137 86 C128 66 72 66 63 86 Z" fill="${c}"/>` }) },
-      { id: 'afro', name: 'Afro', price: 220, top: 22, draw: (c) => ({
-        back: `<circle cx="100" cy="72" r="50" fill="${c}"/>`,
-        front: `<path d="M64 84 C64 56 136 56 136 84 C124 70 76 70 64 84 Z" fill="${c}"/>` }) },
-      { id: 'mohawk', name: 'Mohawk', price: 300, top: 18, draw: (c) => ({ front:
-        `<path d="M64 86 C62 50 138 50 136 86 C128 66 72 66 64 86 Z" fill="${c}" opacity=".35"/>
-         <path d="M90 66 L84 36 L94 40 L96 16 L104 36 L114 24 L110 66 Z" fill="${c}"/>` }) },
-    ]},
-    { id: 'hairColor', name: 'Hair colour', items: [
-      { id: 'black', name: 'Black', price: 0, color: '#1c1a1f' },
-      { id: 'brown', name: 'Brown', price: 0, color: '#5a3825' },
-      { id: 'blonde', name: 'Blonde', price: 0, color: '#e2b857' },
-      { id: 'ginger', name: 'Ginger', price: 0, color: '#c4552b' },
-      { id: 'silver', name: 'Silver', price: 80, color: '#dfe3ea' },
-      { id: 'pink', name: 'Neon pink', price: 150, color: '#ff4fb3' },
-      { id: 'blue', name: 'Electric blue', price: 150, color: '#3fa9ff' },
-      { id: 'green', name: 'Toxic green', price: 200, color: '#7cff4f' },
-    ]},
     { id: 'eyewear', name: 'Eyewear', items: [
       { id: 'none', name: 'None', price: 0, draw: () => '' },
       { id: 'round', name: 'Round specs', price: 80, draw: () =>
-        `<circle cx="86" cy="90" r="9.5" fill="#fff" fill-opacity=".15" stroke="#1b1b1b" stroke-width="2.5"/>
-         <circle cx="114" cy="90" r="9.5" fill="#fff" fill-opacity=".15" stroke="#1b1b1b" stroke-width="2.5"/>
-         <path d="M95.5 89 Q100 85 104.5 89" stroke="#1b1b1b" stroke-width="2.5" fill="none"/>` },
+        `<circle cx="82" cy="92" r="11" fill="#fff" fill-opacity=".15" stroke="#1b1b1b" stroke-width="2.5"/>
+         <circle cx="118" cy="92" r="11" fill="#fff" fill-opacity=".15" stroke="#1b1b1b" stroke-width="2.5"/>
+         <path d="M93 91 Q100 87 107 91" stroke="#1b1b1b" stroke-width="2.5" fill="none"/>` },
       { id: 'shades', name: 'Shades', price: 200, draw: () =>
-        `<path d="M64 84 H136" stroke="#111" stroke-width="3"/>
-         <path d="M71 83 H97 V92 Q97 100 89 100 H79 Q71 100 71 92 Z M103 83 H129 V92 Q129 100 121 100 H111 Q103 100 103 92 Z" fill="url(#g-shade)"/>
-         <path d="M75 87 L82 87 M107 87 L114 87" stroke="#fff" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>` },
+        `<path d="M58 87 H142" stroke="#111" stroke-width="3"/>
+         <path d="M67 86 H96 V95 Q96 104 87 104 H76 Q67 104 67 95 Z M104 86 H133 V95 Q133 104 124 104 H113 Q104 104 104 95 Z" fill="url(#g-shade)"/>
+         <path d="M72 90 L80 90 M109 90 L117 90" stroke="#fff" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>` },
       { id: 'visor', name: 'Cyber visor', price: 450, draw: () =>
-        `<path d="M60 80 H140 L136 98 Q100 105 64 98 Z" fill="url(#g-visor)" opacity=".92" filter="url(#f-glow)"/>
-         <path d="M70 85 H128" stroke="#fff" stroke-opacity=".6" stroke-width="1.5"/>` },
+        `<path d="M54 82 H146 L142 102 Q100 109 58 102 Z" fill="url(#g-visor)" opacity=".92" filter="url(#f-glow)"/>
+         <path d="M64 87 H136" stroke="#fff" stroke-opacity=".6" stroke-width="1.5"/>` },
       { id: 'laser', name: 'Laser eyes', price: 800, hidesEyes: true, draw: () =>
         `<g filter="url(#f-glow)">
-           <path d="M86 88 L0 66 L0 82 L86 92 Z M114 88 L200 66 L200 82 L114 92 Z" fill="#ff3b3b" opacity=".75"/>
-           <circle cx="86" cy="90" r="6" fill="#ff2a2a"/><circle cx="114" cy="90" r="6" fill="#ff2a2a"/>
-           <circle cx="86" cy="90" r="2.5" fill="#fff"/><circle cx="114" cy="90" r="2.5" fill="#fff"/>
+           <path d="M82 90 L0 68 L0 84 L82 94 Z M118 90 L200 68 L200 84 L118 94 Z" fill="#ff3b3b" opacity=".75"/>
+           <circle cx="82" cy="92" r="7" fill="#ff2a2a"/><circle cx="118" cy="92" r="7" fill="#ff2a2a"/>
+           <circle cx="82" cy="92" r="3" fill="#fff"/><circle cx="118" cy="92" r="3" fill="#fff"/>
          </g>` },
     ]},
     { id: 'headgear', name: 'Headgear', items: [
       { id: 'none', name: 'None', price: 0, draw: () => '' },
       { id: 'cap', name: 'Cap', price: 120, draw: () =>
-        `<path d="M62 78 C60 40 140 40 138 78 Z" fill="#2f6bff"/>
-         <path d="M96 74 C120 70 150 72 162 80 C150 86 120 84 96 80 Z" fill="#1d47b8"/>
-         <circle cx="100" cy="45" r="3.5" fill="#1d47b8"/>` },
-      { id: 'phones', name: 'Headphones', price: 250, draw: (top) =>
-        `<path d="M60 96 C56 ${top - 22} 144 ${top - 22} 140 96" stroke="#15171e" stroke-width="7" fill="none"/>
-         <rect x="50" y="80" width="16" height="28" rx="7" fill="#15171e"/>
-         <rect x="134" y="80" width="16" height="28" rx="7" fill="#15171e"/>
-         <rect x="53" y="84" width="10" height="20" rx="5" fill="#ff4fb3"/>
-         <rect x="137" y="84" width="10" height="20" rx="5" fill="#ff4fb3"/>` },
-      { id: 'halo', name: 'Halo', price: 900, draw: (top) =>
-        `<ellipse cx="100" cy="${top - 10}" rx="28" ry="7" fill="none" stroke="#ffd84a" stroke-width="4" filter="url(#f-glow)"/>` },
-      { id: 'crown', name: 'Crown', price: 1500, draw: (top) =>
-        `<g transform="translate(0 ${top - 50})">
-           <path d="M76 54 L72 28 L88 40 L100 22 L112 40 L128 28 L124 54 Z" fill="url(#g-gold)" stroke="#a8740a" stroke-width="1.5"/>
-           <circle cx="100" cy="45" r="3.5" fill="#d22f3c"/><circle cx="86" cy="48" r="2.5" fill="#3fa9ff"/><circle cx="114" cy="48" r="2.5" fill="#3fa9ff"/>
-         </g>` },
+        `<path d="M60 74 C58 36 142 36 140 74 Z" fill="#2f6bff"/>
+         <path d="M96 70 C120 66 152 68 164 76 C152 82 120 80 96 76 Z" fill="#1d47b8"/>
+         <circle cx="100" cy="41" r="3.5" fill="#1d47b8"/>` },
+      { id: 'phones', name: 'Headphones', price: 250, draw: () =>
+        `<path d="M52 96 C48 26 152 26 148 96" stroke="#15171e" stroke-width="7" fill="none"/>
+         <rect x="42" y="80" width="17" height="30" rx="7" fill="#15171e"/>
+         <rect x="141" y="80" width="17" height="30" rx="7" fill="#15171e"/>
+         <rect x="45" y="84" width="11" height="22" rx="5" fill="#ff4fb3"/>
+         <rect x="144" y="84" width="11" height="22" rx="5" fill="#ff4fb3"/>` },
+      { id: 'halo', name: 'Halo', price: 900, draw: () =>
+        `<ellipse cx="100" cy="30" rx="30" ry="7" fill="none" stroke="#ffd84a" stroke-width="4" filter="url(#f-glow)"/>` },
+      { id: 'crown', name: 'Crown', price: 1500, draw: () =>
+        `<path d="M76 54 L72 28 L88 40 L100 22 L112 40 L128 28 L124 54 Z" fill="url(#g-gold)" stroke="#a8740a" stroke-width="1.5"/>
+         <circle cx="100" cy="45" r="3.5" fill="#d22f3c"/><circle cx="86" cy="48" r="2.5" fill="#3fa9ff"/><circle cx="114" cy="48" r="2.5" fill="#3fa9ff"/>` },
       { id: 'laurel', name: 'Laurel wreath', price: 0, unlock: 4, draw: laurel },
-    ]},
-    { id: 'skin', name: 'Skin', items: [
-      { id: 's1', name: 'Tone 1', price: 0, color: '#f9d7c0' },
-      { id: 's2', name: 'Tone 2', price: 0, color: '#eab48f' },
-      { id: 's3', name: 'Tone 3', price: 0, color: '#c98e62' },
-      { id: 's4', name: 'Tone 4', price: 0, color: '#a0673f' },
-      { id: 's5', name: 'Tone 5', price: 0, color: '#6e4529' },
-      { id: 's6', name: 'Tone 6', price: 0, color: '#4a2e1c' },
-      { id: 'alien', name: 'Alien', price: 300, color: '#8fe388' },
-      { id: 'smurf', name: 'Deep blue', price: 300, color: '#6f9cff' },
     ]},
     { id: 'bg', name: 'Backdrop', items: [
       { id: 'midnight', name: 'Midnight', price: 0, fill: 'url(#g-midnight)' },
@@ -549,52 +591,67 @@
   ];
   const SLOT = Object.fromEntries(SLOTS.map((s) => [s.id, s]));
   const item = (slot, id) => SLOT[slot].items.find((i) => i.id === id) || SLOT[slot].items[0];
-  const DEFAULT_LOOK = { outfit: 'hoodie', hair: 'quiff', hairColor: 'black', eyewear: 'none', headgear: 'none', skin: 's2', bg: 'midnight' };
+  const DEFAULT_LOOK = { species: 'fox', fur: 'natural', outfit: 'hoodie', eyewear: 'none', headgear: 'none', bg: 'midnight' };
 
   const MOUTHS = {
-    neutral: 'M90 109 Q100 114 110 109',
-    happy: 'M87 105 Q100 121 113 105',
-    sad: 'M90 113 Q100 104 110 113',
+    neutral: `<path d="M92 108 Q96 112 100 108 Q104 112 108 108" stroke="#2a1a14" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+    happy: `<path d="M90 107 Q100 122 110 107 Z" fill="#7a2e3a" stroke="#2a1a14" stroke-width="2.4" stroke-linejoin="round"/>`,
+    sad: `<path d="M92 114 Q100 106 108 114" stroke="#2a1a14" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
   };
+
+  const MYSTERY = `<svg class="avatar" viewBox="0 0 200 200" role="img" aria-label="Your animal, not chosen yet">
+    <circle cx="100" cy="100" r="100" fill="url(#g-midnight)"/>
+    <text x="100" y="128" text-anchor="middle" font-size="96" font-family="Bungee, Arial Black, sans-serif" fill="#ffffff" fill-opacity=".85">?</text></svg>`;
 
   // `level` (optional) draws a ring in the persona's colour, so the avatar shows maturity at a glance.
   function avatarSVG(look, mood = 'neutral', level = null) {
-    const skin = item('skin', look.skin).color;
-    const hc = item('hairColor', look.hairColor).color;
-    const hair = item('hair', look.hair);
-    const hairParts = hair.draw(hc);
+    const a = item('species', look.species);
+    const fu = item('fur', look.fur);
+    const natural = fu.id === 'natural';
+    const f = natural ? a.fur : fu.color, d = natural ? a.dark : fu.dark, l = natural ? a.light : fu.light;
+    const headColor = a.headColor || f;
+    const h = { cx: 100, cy: 90, rx: 46, ry: 42, ...a.head };
+    const eyeY = a.eyeY || 92, dx = a.eyeDX || 18;
     const bg = item('bg', look.bg);
     const eyes = item('eyewear', look.eyewear);
     const head = item('headgear', look.headgear);
 
-    const face = eyes.hidesEyes ? '' :
-      `<ellipse cx="86" cy="90" rx="4" ry="5" fill="#1f1a24"/><ellipse cx="114" cy="90" rx="4" ry="5" fill="#1f1a24"/>
-       <circle cx="87.5" cy="88" r="1.4" fill="#fff"/><circle cx="115.5" cy="88" r="1.4" fill="#fff"/>`;
+    let eyeSvg = '';
+    if (!eyes.hidesEyes) {
+      for (const x of [100 - dx, 100 + dx]) {
+        eyeSvg += (a.eyeRing ? `<circle cx="${x}" cy="${eyeY}" r="8.5" fill="#fff"/>` : '') +
+          `<circle cx="${x}" cy="${eyeY}" r="${a.eyeRing ? 5.5 : 6.5}" fill="#1f1a24"/>
+           <circle cx="${x + 2}" cy="${eyeY - 2.5}" r="2" fill="#fff"/><circle cx="${x - 2}" cy="${eyeY + 2}" r="1" fill="#fff"/>`;
+      }
+    }
+    const nose = a.nose === 'dots'
+      ? `<circle cx="95" cy="102" r="1.8" fill="#2a3a22"/><circle cx="105" cy="102" r="1.8" fill="#2a3a22"/>`
+      : `<path d="M94 100 Q100 97 106 100 Q103 105.5 100 105.5 Q97 105.5 94 100 Z" fill="${a.nose}"/>`;
     const ring = level === null ? '' :
       `<circle cx="100" cy="100" r="95" fill="none" stroke="${PERSONAS[level].color}" stroke-width="10"/>`;
 
-    return `<svg class="avatar" viewBox="0 0 200 200" role="img" aria-label="Avatar"><g clip-path="url(#c-round)">
+    return `<svg class="avatar" viewBox="0 0 200 200" role="img" aria-label="${a.name} avatar"><g clip-path="url(#c-round)">
       <rect width="200" height="200" fill="${bg.fill}"/>${bg.extra || ''}
-      ${hairParts.back || ''}
-      <rect x="88" y="110" width="24" height="34" fill="${skin}"/><rect x="88" y="110" width="24" height="34" fill="#000" opacity=".15"/>
-      ${item('outfit', look.outfit).draw(skin)}
-      <circle cx="64" cy="92" r="7" fill="${skin}"/><circle cx="136" cy="92" r="7" fill="${skin}"/>
-      <ellipse cx="100" cy="88" rx="36" ry="40" fill="${skin}"/>
-      <circle cx="78" cy="102" r="5" fill="#ff7a7a" opacity=".25"/><circle cx="122" cy="102" r="5" fill="#ff7a7a" opacity=".25"/>
-      <path d="M100 92 Q96 100 101 101" stroke="#000" stroke-opacity=".25" stroke-width="2" fill="none" stroke-linecap="round"/>
-      <path d="M79 79 Q86 75 93 79 M107 79 Q114 75 121 79" stroke="${hc}" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-      ${face}
-      <path d="${MOUTHS[mood] || MOUTHS.neutral}" stroke="#2a1a14" stroke-width="3" fill="none" stroke-linecap="round"/>
-      ${hairParts.front || ''}
-      ${eyes.draw()}
-      ${head.draw(hair.top)}
+      <rect x="86" y="116" width="28" height="28" fill="${headColor}"/>
+      ${item('outfit', look.outfit).draw(headColor)}
+      ${a.back(f, d, l)}
+      <ellipse cx="${h.cx}" cy="${h.cy}" rx="${h.rx}" ry="${h.ry}" fill="${headColor}"/>
+      ${a.face(f, d, l)}
+      <circle cx="72" cy="106" r="7" fill="#ff7a9a" opacity=".35"/><circle cx="128" cy="106" r="7" fill="#ff7a9a" opacity=".35"/>
+      ${eyeSvg}
+      <g transform="translate(0 ${a.mouthDY || 0})">${nose}${MOUTHS[mood] || MOUTHS.neutral}</g>
+      ${a.front ? a.front() : ''}
+      <g transform="translate(100 ${eyeY}) scale(${dx / 18} 1) translate(-100 -92)">${eyes.draw()}</g>
+      <g transform="translate(0 ${a.hatDY || 0})">${head.draw()}</g>
       ${ring}
     </g></svg>`;
   }
 
   // ================= State =================
-  const SAVE_KEY = 'ui-exciter-save';
+  const SAVE_KEY = 'ui-exciter-save-v2';
   let money = START_MONEY;
+  let setupStep = 0;      // 0–1 setup questions, 2 animal reveal, 3 done
+  let bands = [];         // setup answer bands
   let index = 0;          // current question
   let picked = null;      // chosen answer index for current question
   let roll = null;        // which outcome was rolled, for risky choices
@@ -607,12 +664,12 @@
   let fx = null;          // what the last answer changed, shown with its result
   let mood = 'neutral';
   let view = 'play';
-  let shopSlot = 'outfit';
+  let shopSlot = 'species';
   let preview = null;     // item id being previewed (not yet owned) in shopSlot
   let resetArmed = false;
 
   function snapshot() {
-    return { money, index, picked, roll, owned, look, goal, achieved, traits, bestLevel, fx };
+    return { money, setupStep, bands, index, picked, roll, owned, look, goal, achieved, traits, bestLevel, fx };
   }
   function save() {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot())); } catch {}
@@ -622,6 +679,8 @@
   }
   function applyState(d) {
     if (typeof d.money === 'number') money = d.money;
+    if (typeof d.setupStep === 'number') setupStep = d.setupStep;
+    if (Array.isArray(d.bands)) bands = d.bands;
     if (typeof d.index === 'number') index = d.index;
     if (d.picked === null || typeof d.picked === 'number') picked = d.picked ?? null;
     if (d.roll === null || typeof d.roll === 'number') roll = d.roll ?? null;
@@ -646,6 +705,7 @@
   const isUnlocked = (it) => !it.unlock || bestLevel >= it.unlock;
   const isOwned = (slot, it) => (it.price === 0 && isUnlocked(it)) || owned.includes(slot + ':' + it.id);
   const goalOf = (id) => GOALS.find((g) => g.id === id);
+  const onboarded = () => setupStep >= 3;
 
   // ================= Rendering =================
   const $ = (id) => document.getElementById(id);
@@ -669,11 +729,16 @@
 
   function renderHud() {
     const lvl = levelOf();
-    $('hud-avatar').innerHTML = avatarSVG(look, mood, lvl);
+    const ready = onboarded();
+    // Before setup finishes the animal isn't decided yet, so show a mystery placeholder.
+    $('hud-avatar').innerHTML = setupStep < SETUP.length ? MYSTERY : avatarSVG(look, mood, ready ? lvl : null);
     renderMoney(false);
     const chip = $('persona-chip');
+    chip.hidden = !ready;
     chip.textContent = PERSONAS[lvl].name + ' · ' + riskStyle();
     chip.style.setProperty('--level', PERSONAS[lvl].chip || PERSONAS[lvl].color);
+    $('goal-block').hidden = !ready;
+    $('tabs').hidden = !ready;
 
     const g = goalOf(goal);
     if (!g) {
@@ -693,6 +758,7 @@
   }
 
   function renderTabs() {
+    if (!onboarded()) view = 'play';
     for (const v of ['play', 'profile', 'style']) {
       $('tab-' + v).setAttribute('aria-selected', view === v);
       $('view-' + v).hidden = view !== v;
@@ -715,11 +781,47 @@
     return b;
   }
 
-  function renderGoalPicker() {
-    $('progress').textContent = achieved.length ? 'New ambition' : 'Before you start';
-    $('question').textContent = 'What are you saving towards?';
+  function hidePlayExtras() {
     $('result').hidden = true;
     $('next').hidden = true;
+  }
+
+  function renderSetupQuestion(step) {
+    const s = SETUP[step];
+    $('progress').textContent = 'Getting to know you · ' + (step + 1) + ' of ' + SETUP.length;
+    $('question').textContent = s.q;
+    hidePlayExtras();
+    $('choices').replaceChildren(...s.choices.map((c) => {
+      const b = choiceButton(c.text);
+      b.addEventListener('click', () => answerSetup(c));
+      return b;
+    }));
+  }
+
+  function renderReveal() {
+    const a = item('species', look.species);
+    const lvl = levelOf();
+    $('progress').textContent = 'Meet your money self';
+    $('question').textContent = 'You\'re a ' + a.name + '!';
+    const wrap = document.createElement('div');
+    wrap.className = 'reveal';
+    wrap.innerHTML = `<div class="avatar-wrap">${avatarSVG(look, 'happy', lvl)}</div>
+      <p class="tagline"></p>
+      <p class="chipline"></p>
+      <p class="blurb"></p>`;
+    wrap.querySelector('.tagline').textContent = a.tagline;
+    wrap.querySelector('.chipline').textContent = 'Starting as: ' + PERSONAS[lvl].name + ' · ' + riskStyle();
+    wrap.querySelector('.blurb').textContent = PERSONAS[lvl].blurb + ' Every choice you make from here shapes who you become.';
+    $('choices').replaceChildren(wrap);
+    $('result').hidden = true;
+    $('next').textContent = 'Choose an ambition';
+    $('next').hidden = false;
+  }
+
+  function renderGoalPicker() {
+    $('progress').textContent = achieved.length ? 'New ambition' : 'One more thing';
+    $('question').textContent = 'What are you saving towards?';
+    hidePlayExtras();
     $('choices').replaceChildren(...GOALS.map((g) => {
       const b = choiceButton(g.name, g.desc);
       const t = document.createElement('span');
@@ -761,6 +863,8 @@
   }
 
   function renderPlay() {
+    if (setupStep < SETUP.length) { renderSetupQuestion(setupStep); return; }
+    if (setupStep === SETUP.length) { renderReveal(); return; }
     if (goal === null && picked === null) { renderGoalPicker(); return; }
 
     const choicesEl = $('choices');
@@ -803,8 +907,7 @@
     });
 
     if (picked === null) {
-      resultEl.hidden = true;
-      nextBtn.hidden = true;
+      hidePlayExtras();
     } else {
       const c = q.choices[picked];
       const r = resultOf(c, roll);
@@ -826,9 +929,10 @@
   function renderProfile() {
     const lvl = levelOf();
     const p = PERSONAS[lvl];
+    const a = item('species', look.species);
     $('p-avatar').innerHTML = avatarSVG(look, mood, lvl);
     $('p-name').textContent = p.name;
-    $('p-risk').textContent = riskStyle() + ' with risk';
+    $('p-risk').textContent = a.name + ' · ' + riskStyle() + ' with risk';
     $('p-blurb').textContent = p.blurb;
     $('p-next').textContent = p.next;
 
@@ -884,7 +988,7 @@
       const wearing = look[shopSlot] === it.id;
       const levelLocked = !isUnlocked(it);
       let tag;
-      if (wearing) tag = 'Wearing';
+      if (wearing) tag = shopSlot === 'species' ? 'You' : 'Wearing';
       else if (levelLocked) tag = 'Reach ' + PERSONAS[it.unlock].name;
       else if (it.unlock) tag = 'Earned';
       else if (have) tag = it.price ? 'Owned' : 'Free';
@@ -926,6 +1030,19 @@
   }
 
   // ================= Actions =================
+  function answerSetup(c) {
+    Object.assign(traits, c.traits);
+    bands[setupStep] = c.band;
+    setupStep += 1;
+    if (setupStep === SETUP.length) {
+      look.species = ANIMAL_FOR[bands[0]][bands[1]];
+      bestLevel = Math.max(1, levelOf());
+      mood = 'happy';
+    }
+    save();
+    renderAll();
+  }
+
   function choose(i) {
     if (picked !== null) return;
     const before = levelOf();
@@ -970,6 +1087,13 @@
   }
 
   $('next').addEventListener('click', () => {
+    if (setupStep === SETUP.length) {
+      setupStep += 1;
+      mood = 'neutral';
+      save();
+      renderAll();
+      return;
+    }
     index = index >= QUESTIONS.length ? 0 : index + 1;  // new round keeps your balance
     picked = null;
     roll = null;
@@ -1016,6 +1140,7 @@
   $('cancel').addEventListener('click', () => { preview = null; renderStyle(); });
 
   function setView(v) {
+    if (!onboarded()) return;
     view = v;
     preview = null;
     renderTabs();
@@ -1037,8 +1162,8 @@
     }
     resetArmed = false;
     btn.textContent = 'Reset game';
-    money = START_MONEY; index = 0; picked = null; roll = null; owned = []; look = { ...DEFAULT_LOOK };
-    goal = null; achieved = []; traits = { ...START_TRAITS }; bestLevel = 1; fx = null;
+    money = START_MONEY; setupStep = 0; bands = []; index = 0; picked = null; roll = null; owned = [];
+    look = { ...DEFAULT_LOOK }; goal = null; achieved = []; traits = { ...START_TRAITS }; bestLevel = 1; fx = null;
     mood = 'neutral'; preview = null; view = 'play';
     save();
     renderAll();
@@ -1048,7 +1173,7 @@
   function start(data) {
     applyState(loadSaved());
     if (data && typeof data.money === 'number') applyState(data);
-    bestLevel = Math.max(bestLevel, levelOf());
+    if (onboarded()) bestLevel = Math.max(bestLevel, levelOf());
     renderAll();
   }
   window.claude?.hot?.snapshot?.(snapshot);
