@@ -128,6 +128,37 @@
   .reveal .big { font-family: var(--font-display); font-size: 1.6rem; margin: 0; }
   .reveal p { margin: 0; line-height: 1.5; max-width: 36ch; }
   .reveal .chipline { font-weight: 700; color: var(--muted); }
+  .egg-stage { display: flex; justify-content: center; }
+  .egg-stage .avatar-wrap { width: min(40vw, 150px); aspect-ratio: 1; max-width: 100%; }
+  .hatch { position: relative; }
+  .hatch > .shell { position: absolute; inset: 0; pointer-events: none; }
+
+  /* Egg motion: an idle wobble, faster once cracked; the reveal shakes, splits and pops the animal out */
+  .egg-body { transform-box: fill-box; transform-origin: 50% 100%; animation: wobble 2.6s ease-in-out infinite; }
+  .egg-body.restless { animation-duration: 1.3s; }
+  @keyframes wobble {
+    0%, 55%, 100% { transform: rotate(0); }
+    63% { transform: rotate(-7deg); }
+    71% { transform: rotate(6deg); }
+    79% { transform: rotate(-4deg); }
+    87% { transform: rotate(2deg); }
+  }
+  .shell .both { transform-box: fill-box; transform-origin: 50% 100%; animation: shake 0.7s ease-in-out; }
+  @keyframes shake {
+    0%, 100% { transform: rotate(0); }
+    20% { transform: rotate(-8deg); } 40% { transform: rotate(8deg); }
+    60% { transform: rotate(-6deg); } 80% { transform: rotate(5deg); }
+  }
+  .shell .top { transform-box: fill-box; transform-origin: 50% 100%; animation: flyoff 0.7s ease-in 0.8s forwards; }
+  .shell .bottom { animation: drop 0.7s ease-in 0.8s forwards; }
+  .shell .cover { animation: fadeout 0.35s ease-out 0.8s forwards; }
+  @keyframes flyoff { to { transform: translate(-30px, -140px) rotate(-40deg); opacity: 0; } }
+  @keyframes drop { to { transform: translateY(90px); opacity: 0; } }
+  @keyframes fadeout { to { opacity: 0; } }
+  .hatch > .pet { animation: pop 0.55s cubic-bezier(.3, 1.6, .5, 1) 0.85s both; }
+  @keyframes pop { from { transform: scale(.6); } to { transform: scale(1); } }
+  .reveal .after { animation: fadein 0.4s ease-out 1.2s both; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
   .primary {
     font-weight: 700; padding: 14px; border: none; border-radius: 12px;
@@ -186,6 +217,8 @@
   @media (prefers-reduced-motion: reduce) {
     #money.bump { animation: none; }
     .bar > span { transition: none; }
+    .egg-body, .shell .both, .hatch > .pet, .reveal .after { animation: none; }
+    .hatch > .shell { display: none; }
   }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=DM+Sans:wght@400;600;700&display=swap">
@@ -599,9 +632,37 @@
     sad: `<path d="M92 114 Q100 106 108 114" stroke="#2a1a14" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
   };
 
-  const MYSTERY = `<svg class="avatar" viewBox="0 0 200 200" role="img" aria-label="Your animal, not chosen yet">
-    <circle cx="100" cy="100" r="100" fill="url(#g-midnight)"/>
-    <text x="100" y="128" text-anchor="middle" font-size="96" font-family="Bungee, Arial Black, sans-serif" fill="#ffffff" fill-opacity=".85">?</text></svg>`;
+  // The egg: two shell halves along a zigzag, so the same shapes can split apart when it hatches.
+  const ZIG = 'L52 102 L64 112 L76 100 L88 112 L100 100 L112 112 L124 100 L136 112 L148 102 L160 110';
+  const SHELL_TOP = 'M40 110 C40 78 64 26 100 26 C136 26 160 78 160 110 L148 102 L136 112 L124 100 L112 112 L100 100 L88 112 L76 100 L64 112 L52 102 Z';
+  const SHELL_BOTTOM = 'M40 110 ' + ZIG + ' C160 158 134 182 100 182 C66 182 40 158 40 110 Z';
+  const SPOTS = `<circle cx="72" cy="66" r="9" fill="#ffd1dc"/><circle cx="128" cy="58" r="6" fill="#c9e8ff"/>
+    <circle cx="136" cy="94" r="8" fill="#d5f3c4"/><circle cx="62" cy="150" r="7" fill="#c9e8ff"/><circle cx="142" cy="150" r="6" fill="#ffd1dc"/>`;
+  // stage 0: asleep; 1: cracked and peeking
+  function eggSVG(stage) {
+    const eyes = stage === 0
+      ? `<path d="M80 128 Q86 133 92 128 M108 128 Q114 133 120 128" stroke="#3a2a22" stroke-width="3" fill="none" stroke-linecap="round"/>`
+      : `<circle cx="86" cy="128" r="5" fill="#3a2a22"/><circle cx="114" cy="128" r="5" fill="#3a2a22"/>
+         <circle cx="87.5" cy="126.5" r="1.6" fill="#fff"/><circle cx="115.5" cy="126.5" r="1.6" fill="#fff"/>`;
+    const crack = stage === 0 ? '' :
+      `<path d="M58 98 L70 90 L78 102 L90 92 L98 104 L106 96" stroke="#9c8a74" stroke-width="2.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`;
+    return `<svg class="avatar" viewBox="0 0 200 200" role="img" aria-label="An egg, not hatched yet">
+      <circle cx="100" cy="100" r="100" fill="url(#g-midnight)"/>
+      <ellipse cx="100" cy="186" rx="44" ry="6" fill="#000" opacity=".25"/>
+      <g class="egg-body${stage ? ' restless' : ''}">
+        <path d="${SHELL_TOP}" fill="#fff6e6"/><path d="${SHELL_BOTTOM}" fill="#fff6e6"/>
+        ${SPOTS}${crack}${eyes}
+        <circle cx="76" cy="140" r="6" fill="#ff7a9a" opacity=".35"/><circle cx="124" cy="140" r="6" fill="#ff7a9a" opacity=".35"/>
+        <path d="M95 142 Q100 146 105 142" stroke="#3a2a22" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      </g></svg>`;
+  }
+  // Overlay for the reveal: covers the animal, shakes, then splits and falls away.
+  const HATCH_SHELL = `<svg class="avatar" viewBox="0 0 200 200" aria-hidden="true">
+    <circle class="cover" cx="100" cy="100" r="100" fill="url(#g-midnight)"/>
+    <g class="both">
+      <g class="bottom"><path d="${SHELL_BOTTOM}" fill="#fff6e6"/><circle cx="62" cy="150" r="7" fill="#c9e8ff"/><circle cx="142" cy="150" r="6" fill="#ffd1dc"/></g>
+      <g class="top"><path d="${SHELL_TOP}" fill="#fff6e6"/><circle cx="72" cy="66" r="9" fill="#ffd1dc"/><circle cx="128" cy="58" r="6" fill="#c9e8ff"/><circle cx="136" cy="94" r="8" fill="#d5f3c4"/></g>
+    </g></svg>`;
 
   // `level` (optional) draws a ring in the persona's colour, so the avatar shows maturity at a glance.
   function avatarSVG(look, mood = 'neutral', level = null) {
@@ -730,8 +791,8 @@
   function renderHud() {
     const lvl = levelOf();
     const ready = onboarded();
-    // Before setup finishes the animal isn't decided yet, so show a mystery placeholder.
-    $('hud-avatar').innerHTML = setupStep < SETUP.length ? MYSTERY : avatarSVG(look, mood, ready ? lvl : null);
+    // Before setup finishes the animal isn't decided yet, so show the egg.
+    $('hud-avatar').innerHTML = setupStep <= SETUP.length ? eggSVG(Math.min(setupStep, 1)) : avatarSVG(look, mood, ready ? lvl : null);
     renderMoney(false);
     const chip = $('persona-chip');
     chip.hidden = !ready;
@@ -788,10 +849,13 @@
 
   function renderSetupQuestion(step) {
     const s = SETUP[step];
-    $('progress').textContent = 'Getting to know you · ' + (step + 1) + ' of ' + SETUP.length;
+    $('progress').textContent = (step === 0 ? 'Something is stirring' : 'It\'s cracking') + ' · ' + (step + 1) + ' of ' + SETUP.length;
     $('question').textContent = s.q;
     hidePlayExtras();
-    $('choices').replaceChildren(...s.choices.map((c) => {
+    const egg = document.createElement('div');
+    egg.className = 'egg-stage';
+    egg.innerHTML = `<div class="avatar-wrap">${eggSVG(step)}</div>`;
+    $('choices').replaceChildren(egg, ...s.choices.map((c) => {
       const b = choiceButton(c.text);
       b.addEventListener('click', () => answerSetup(c));
       return b;
@@ -802,13 +866,15 @@
     const a = item('species', look.species);
     const lvl = levelOf();
     $('progress').textContent = 'Meet your money self';
-    $('question').textContent = 'You\'re a ' + a.name + '!';
+    $('question').textContent = 'It\'s hatching!';
     const wrap = document.createElement('div');
     wrap.className = 'reveal';
-    wrap.innerHTML = `<div class="avatar-wrap">${avatarSVG(look, 'happy', lvl)}</div>
-      <p class="tagline"></p>
-      <p class="chipline"></p>
-      <p class="blurb"></p>`;
+    wrap.innerHTML = `<div class="avatar-wrap hatch"><div class="pet">${avatarSVG(look, 'happy', lvl)}</div><div class="shell">${HATCH_SHELL}</div></div>
+      <p class="big after"></p>
+      <p class="tagline after"></p>
+      <p class="chipline after"></p>
+      <p class="blurb after"></p>`;
+    wrap.querySelector('.big').textContent = 'You\'re a ' + a.name + '!';
     wrap.querySelector('.tagline').textContent = a.tagline;
     wrap.querySelector('.chipline').textContent = 'Starting as: ' + PERSONAS[lvl].name + ' · ' + riskStyle();
     wrap.querySelector('.blurb').textContent = PERSONAS[lvl].blurb + ' Every choice you make from here shapes who you become.';
