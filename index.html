@@ -1,0 +1,135 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>UI Exciter</title>
+<style>
+  /* Layout: one screen, counter above a single big tap target, centred in the thumb zone */
+  :root {
+    --bg: #eef1f6;
+    --fg: #1b2230;
+    --muted: #677189;
+    --box: #2f6bff;
+    --box-edge: #1d47b8;
+    --box-fg: #ffffff;
+    --font-display: "Bungee", "Arial Black", system-ui, sans-serif;
+    --font-body: "DM Sans", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111520; --fg: #e8ecf5; --muted: #8a93a8;
+      --box: #4b7fff; --box-edge: #2a4fb0; --box-fg: #ffffff;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111520; --fg: #e8ecf5; --muted: #8a93a8;
+    --box: #4b7fff; --box-edge: #2a4fb0; --box-fg: #ffffff;
+    color-scheme: dark;
+  }
+
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 24px;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+
+  .score { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+  .label {
+    font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+  }
+  #count {
+    font-family: var(--font-display);
+    font-size: clamp(3.5rem, 18vw, 7rem);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #clicker {
+    width: min(70vw, 260px);
+    aspect-ratio: 1;
+    max-width: 100%;
+    border: none;
+    border-radius: 20px;
+    background: var(--box);
+    color: var(--box-fg);
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    box-shadow: 0 10px 0 var(--box-edge);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: transform 60ms ease-out, box-shadow 60ms ease-out;
+  }
+  #clicker.down { transform: translateY(8px); box-shadow: 0 2px 0 var(--box-edge); }
+  #clicker:focus-visible { outline: 3px solid var(--fg); outline-offset: 6px; }
+
+  #count.bump { animation: bump 140ms ease-out; }
+  @keyframes bump { 50% { transform: scale(1.12); } }
+  @media (prefers-reduced-motion: reduce) {
+    #count.bump { animation: none; }
+    #clicker { transition: none; }
+  }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=DM+Sans:wght@400;600&display=swap">
+
+<div class="score">
+  <span class="label">Clicks</span>
+  <span id="count">0</span>
+</div>
+<button id="clicker" type="button" aria-label="Click to add one">TAP</button>
+
+<script>
+  const countEl = document.getElementById('count');
+  const btn = document.getElementById('clicker');
+  const KEY = 'ui-exciter-count';
+  let count = 0;
+
+  function load() {
+    try { return parseInt(localStorage.getItem(KEY), 10) || 0; } catch { return 0; }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, String(count)); } catch {}
+  }
+  function render() { countEl.textContent = count.toLocaleString(); }
+
+  function click() {
+    count += 1;
+    render();
+    save();
+    countEl.classList.remove('bump');
+    void countEl.offsetWidth; // restart animation
+    countEl.classList.add('bump');
+  }
+
+  // pointerdown fires immediately on touch (no tap delay); keyboard still works via click
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    btn.classList.add('down');
+    click();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) =>
+    btn.addEventListener(t, () => btn.classList.remove('down'))
+  );
+  btn.addEventListener('click', (e) => { if (e.detail === 0) click(); }); // keyboard Enter/Space
+
+  function start(data) {
+    count = typeof data.count === 'number' ? data.count : load();
+    render();
+  }
+  window.claude?.hot?.snapshot?.(() => ({ count }));
+  window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
