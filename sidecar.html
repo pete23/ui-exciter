@@ -38,6 +38,8 @@
   }
   .caption h1 { margin: 0 0 4px; font-size: 1rem; font-weight: 800; letter-spacing: 0.01em; text-wrap: balance; }
   .caption p { margin: 0; font-size: 0.8rem; line-height: 1.4; color: var(--muted); }
+  .caption .togo { margin-top: 6px; color: var(--ink); }
+  .caption .togo strong { font-variant-numeric: tabular-nums; }
   .hint {
     position: absolute;
     bottom: max(12px, env(safe-area-inset-bottom, 0px));
@@ -58,6 +60,7 @@
 <div class="caption">
   <h1>Next stop: Engineering Excellence</h1>
   <p>650 cc twin · one rider · one 45 kg German shepherd in the sidecar</p>
+  <p class="togo">Distance to go: <strong id="togo">5.0 km</strong></p>
 </div>
 <div class="hint"><span>Drag to look around · pinch or scroll to zoom</span></div>
 <div id="fallback" hidden>This scene needs WebGL, which isn't available in this browser.</div>
@@ -267,7 +270,7 @@
   mesh(gantry, new THREE.BoxGeometry(7.3, 2.95, 0.1), mat(0x2b3138), ROAD_X, 5.3, 0.08);
   mesh(gantry, new THREE.PlaneGeometry(7.1, 2.77), new THREE.MeshBasicMaterial({ map: signTex }), ROAD_X, 5.3, 0.14);
   world.add(gantry);
-  let signZ = -42;
+  const SIGN_START = -42;
 
   // ---------- the outfit: bike, sidecar, rider, dog ----------
   const rig = new THREE.Group();
@@ -484,7 +487,7 @@
       if (pinch) view.dist = Math.max(4.5, Math.min(16, view.dist * (pinch / d)));
       pinch = d;
     }
-    lastInput = clock.getElapsedTime();
+    lastInput = now();
   });
   const release = (e) => { pointers.delete(e.pointerId); pinch = 0; dragging = pointers.size > 0; };
   canvas.addEventListener('pointerup', release);
@@ -513,29 +516,33 @@
 
   // ---------- animation ----------
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const clock = new THREE.Clock();
-  let travelled = 0;
+  // Everything is a pure function of real elapsed time, so nothing (dragging, a slow frame, a
+  // backgrounded tab) can stall the journey or the countdown.
+  const t0 = performance.now();
+  function now() { return (performance.now() - t0) / 1000; }
+  const togoEl = document.getElementById('togo');
+  let gantryLap = 0, togoText = '';
   function frame() {
-    const dt = Math.min(clock.getDelta(), 0.05);
-    const t = clock.elapsedTime;
-    const speed = SPEED;
-    travelled += speed * dt;
+    const t = now();
+    const travelled = SPEED * t;
 
     for (const s of scrollers) {
       s.obj.position.z = ((s.baseZ + travelled) % SPAN + SPAN) % SPAN - SPAN + 20;
     }
-    signZ += speed * dt;
-    if (signZ > 16) {
-      signZ -= 250;
-      // Each new gantry shows the distance left at the moment it appears. It keeps counting past zero
-      // on purpose: Engineering Excellence is a place you drive through, not a place you stop.
-      km = START_KM - Math.floor(travelled / SPEED / SECONDS_PER_KM);
-      signTex.redraw(km);
-    }
-    gantry.position.z = signZ;
+    // A gantry comes round every 250 m.
+    gantryLap = Math.floor((travelled + 192) / 250);
+    gantry.position.z = SIGN_START + travelled - 250 * gantryLap;
 
-    const spin = (speed * dt) / 0.345;
-    for (const w of wheels) w.rotation.x -= spin;
+    // The distance drops 1 km every SECONDS_PER_KM, and the sign changes the moment it does. It keeps
+    // counting past zero on purpose: Engineering Excellence is a place you drive through, not a place you stop.
+    const remaining = START_KM - t / SECONDS_PER_KM;
+    const kmNow = Math.ceil(remaining - 1e-9);
+    if (kmNow !== km) { km = kmNow; signTex.redraw(km); }
+    const text = (remaining < -0.05 ? '\u2212' : '') + Math.abs(remaining).toFixed(1) + ' km';
+    if (text !== togoText) { togoText = text; togoEl.textContent = text; }
+
+    const spin = -travelled / 0.345;
+    for (const w of wheels) w.rotation.x = spin % (Math.PI * 2);
 
     if (!reduceMotion) {
       rig.position.y = Math.sin(t * 11) * 0.008 + Math.sin(t * 2.3) * 0.006;
