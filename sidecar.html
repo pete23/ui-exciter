@@ -1,0 +1,772 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Road to Engineering Excellence</title>
+<style>
+  /* Layout: full-bleed WebGL canvas with a small caption card pinned top-left. Single daylight look by design. */
+  :root {
+    --sky: #9fd0f5;
+    --ink: #14202b;
+    --panel: rgba(255, 255, 255, 0.86);
+    --sign: #0b6b3a;
+    --muted: #4a5b6b;
+    --font: "Overpass", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: light;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--sky);
+    color: var(--ink);
+    font-family: var(--font);
+    overflow: hidden;
+    position: relative;
+  }
+  #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  #scene:active { cursor: grabbing; }
+  .caption {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top, 0px));
+    left: max(16px, env(safe-area-inset-left, 0px));
+    max-width: min(300px, calc(100% - 32px));
+    box-sizing: border-box;
+    background: var(--panel);
+    border-left: 6px solid var(--sign);
+    padding: 10px 14px;
+    border-radius: 4px;
+    pointer-events: none;
+  }
+  .caption h1 { margin: 0 0 4px; font-size: 1rem; font-weight: 800; letter-spacing: 0.01em; text-wrap: balance; }
+  .caption p { margin: 0; font-size: 0.8rem; line-height: 1.4; color: var(--muted); }
+  .caption .togo { margin-top: 6px; color: var(--ink); }
+  .caption .togo + .togo { margin-top: 0; }
+  .caption .togo strong { font-variant-numeric: tabular-nums; }
+  .hint {
+    position: absolute;
+    bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 104px);
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 0.8rem;
+    pointer-events: none;
+    animation: hintfade 0.8s ease 7s forwards;
+  }
+  @keyframes hintfade { to { opacity: 0; } }
+
+  /* Driving controls: brake under the left thumb, accelerator under the right, speed between them */
+  .hud {
+    position: absolute;
+    left: max(16px, env(safe-area-inset-left, 0px));
+    right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: max(14px, env(safe-area-inset-bottom, 0px));
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 10px;
+    pointer-events: none;
+  }
+  .pedal {
+    pointer-events: auto; flex: none;
+    width: 88px; height: 88px; border-radius: 18px;
+    border: 3px solid var(--ink); color: #fff;
+    font: 800 1rem var(--font); letter-spacing: 0.02em;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    cursor: pointer;
+  }
+  .pedal.brake { background: #b3261e; }
+  .pedal.gas { background: var(--sign); }
+  .pedal.down { transform: translateY(3px) scale(0.96); filter: brightness(0.8); }
+  .pedal:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  .speedo {
+    background: var(--panel); border-radius: 14px; padding: 8px 12px;
+    display: flex; align-items: center; gap: 10px; min-width: 0;
+  }
+  .speedo .reading { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; }
+  #speed { font-weight: 800; font-size: 2.3rem; font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
+  .speedo .unit { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .speedo.over #speed { color: #b3261e; }
+  .limit {
+    width: 46px; height: 46px; flex: none; box-sizing: border-box; border-radius: 50%;
+    border: 5px solid #d21f1f; background: #fff; color: #111;
+    display: grid; place-items: center; font-weight: 800; font-size: 0.85rem;
+  }
+  .toast {
+    position: absolute; top: 38%; left: 50%; transform: translateX(-50%);
+    max-width: calc(100% - 48px); box-sizing: border-box;
+    background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 8px;
+    font-weight: 800; text-align: center; pointer-events: none;
+  }
+  .toast.bad { background: #b3261e; }
+  .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+  .flash.go { animation: camflash 0.5s ease-out; }
+  @keyframes camflash { from { opacity: 0.7; } to { opacity: 0; } }
+  .hint span { background: var(--panel); color: var(--ink); padding: 4px 12px; border-radius: 999px; }
+  #fallback {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 24px; text-align: center; background: var(--sky);
+  }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;800&display=swap">
+
+<canvas id="scene" aria-label="A blonde rider on a 650cc motorbike with a German shepherd in the sidecar, driving towards a road sign for Engineering Excellence"></canvas>
+<div class="caption">
+  <h1>Next stop: Engineering Excellence</h1>
+  <p>650 cc twin · one rider · one 45 kg German shepherd in the sidecar</p>
+  <p class="togo">Distance to go: <strong id="togo">5.00 km</strong></p>
+  <p class="togo">Camera flashes: <strong id="tickets">0</strong></p>
+</div>
+<div class="hint"><span>Drag to look around · pinch or scroll to zoom</span></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<div id="flash" class="flash"></div>
+<div class="hud">
+  <button id="brake" class="pedal brake" type="button">Brake</button>
+  <div id="speedo" class="speedo">
+    <span class="reading"><span id="speed">80</span><span class="unit">km/h</span></span>
+    <span class="limit" role="img" aria-label="Speed limit 125 kilometres per hour">125</span>
+  </div>
+  <button id="gas" class="pedal gas" type="button">Go</button>
+</div>
+<div id="fallback" hidden>This scene needs WebGL, which isn't available in this browser.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  const canvas = document.getElementById('scene');
+  let renderer;
+  try {
+    if (!window.THREE) throw new Error('three.js did not load');
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  } catch (e) {
+    document.getElementById('fallback').hidden = false;
+    return;
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 600);
+  const baseFov = { value: 42 };   // the resting lens; it widens with speed
+
+  // ---------- helpers ----------
+  const mat = (color, o) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.7, metalness: 0.05 }, o));
+  function mesh(parent, geo, material, x, y, z) {
+    const m = new THREE.Mesh(geo, material);
+    m.position.set(x || 0, y || 0, z || 0);
+    parent.add(m);
+    return m;
+  }
+  const UP = new THREE.Vector3(0, 1, 0);
+  // A cylinder (optionally tapered) running from point a to point b.
+  function rod(parent, a, b, r, material, r2) {
+    const va = new THREE.Vector3(...a), vb = new THREE.Vector3(...b);
+    const d = vb.clone().sub(va);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r2 === undefined ? r : r2, r, d.length(), 14), material);
+    m.position.copy(va).addScaledVector(d, 0.5);
+    m.quaternion.setFromUnitVectors(UP, d.normalize());
+    parent.add(m);
+    return m;
+  }
+  function blob(parent, material, x, y, z, sx, sy, sz) {
+    const m = mesh(parent, new THREE.SphereGeometry(1, 24, 18), material, x, y, z);
+    m.scale.set(sx, sy, sz);
+    return m;
+  }
+  function canvasTexture(w, h, draw) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const t = new THREE.CanvasTexture(c);
+    t.anisotropy = 4;
+    t.redraw = (arg) => { draw(c.getContext('2d'), w, h, arg); t.needsUpdate = true; };
+    return t;
+  }
+
+  // ---------- sky, light, fog ----------
+  const sky = canvasTexture(4, 256, (g, w, h) => {
+    const grad = g.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, '#2f72cf');
+    grad.addColorStop(0.55, '#9fd0f5');
+    grad.addColorStop(1, '#ffe9c9');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, w, h);
+  });
+  sky.redraw();
+  scene.background = sky;
+  scene.fog = new THREE.Fog(0xcfe3ee, 90, 420);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x5c7a4a, 0.62));
+  const sun = new THREE.DirectionalLight(0xfff1d6, 0.72);
+  sun.position.set(7, 11, 5);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  Object.assign(sun.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5, near: 1, far: 30 });
+  scene.add(sun);
+
+  // ---------- world ----------
+  const ROAD_X = -1.6;   // road centre; the outfit rides in the right-hand lane
+  const world = new THREE.Group();
+  scene.add(world);
+
+  const grass = mesh(world, new THREE.PlaneGeometry(900, 900), mat(0x5d9a4c, { roughness: 1 }), 0, -0.02, -200);
+  grass.rotation.x = -Math.PI / 2;
+  const road = mesh(world, new THREE.PlaneGeometry(8, 700), mat(0x3d4146, { roughness: 0.95 }), ROAD_X, 0, -250);
+  road.rotation.x = -Math.PI / 2;
+  road.receiveShadow = true;
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0xf4f4ee });
+  for (const x of [-3.8, 3.8]) {
+    const edge = mesh(world, new THREE.PlaneGeometry(0.14, 700), lineMat, ROAD_X + x, 0.01, -250);
+    edge.rotation.x = -Math.PI / 2;
+  }
+
+  // Things that scroll past: each has a base z and wraps within [-SPAN, 20].
+  const SPAN = 280;
+  const scrollers = [];
+  function scroller(obj, baseZ) { scrollers.push({ obj, baseZ }); world.add(obj); }
+
+  for (let i = 0; i < 35; i++) {
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 3), lineMat);
+    dash.rotation.x = -Math.PI / 2;
+    dash.position.set(ROAD_X, 0.011, 0);
+    scroller(dash, -i * 8);
+  }
+  // Tar seams across the carriageway, so the surface itself visibly rushes past.
+  const seamMat = new THREE.MeshBasicMaterial({ color: 0x2c2f33 });
+  for (let i = 0; i < 20; i++) {
+    const seam = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 0.12 + (i % 3) * 0.05), seamMat);
+    seam.rotation.x = -Math.PI / 2;
+    seam.position.set(ROAD_X, 0.006, 0);
+    scroller(seam, -i * 14 - (i % 4) * 2.5);
+  }
+  const trunkMat = mat(0x6b4a2f), leafMats = [mat(0x2f7a45), mat(0x3b8c4c), mat(0x2a6a3d)];
+  for (let i = 0; i < 34; i++) {
+    const tree = new THREE.Group();
+    const s = 0.8 + ((i * 37) % 10) / 12;
+    mesh(tree, new THREE.CylinderGeometry(0.12 * s, 0.16 * s, 1.2 * s, 8), trunkMat, 0, 0.6 * s, 0);
+    mesh(tree, new THREE.ConeGeometry(1.1 * s, 2.6 * s, 9), leafMats[i % 3], 0, 2.4 * s, 0);
+    mesh(tree, new THREE.ConeGeometry(0.8 * s, 2.0 * s, 9), leafMats[(i + 1) % 3], 0, 3.5 * s, 0);
+    const side = i % 2 ? 1 : -1;
+    tree.position.x = ROAD_X + side * (7 + ((i * 53) % 17));
+    scroller(tree, -i * (SPAN / 34) - ((i * 7) % 5));
+  }
+  const postMat = mat(0xf2f2f2), reflMat = mat(0xd23b2f, { emissive: 0x551008 });
+  for (let i = 0; i < 14; i++) {
+    for (const side of [-1, 1]) {
+      const post = new THREE.Group();
+      mesh(post, new THREE.BoxGeometry(0.1, 0.9, 0.1), postMat, 0, 0.45, 0);
+      mesh(post, new THREE.BoxGeometry(0.11, 0.14, 0.11), reflMat, 0, 0.72, 0);
+      post.position.x = ROAD_X + side * 4.5;
+      scroller(post, -i * 20);
+    }
+  }
+  // Far scenery stays put; it's too distant for the motion to read.
+  const hillMat = mat(0x4f8f5a, { roughness: 1 });
+  [[-120, 70, 16], [-40, 90, 22], [50, 80, 18], [130, 95, 24], [-200, 110, 30], [210, 100, 26]].forEach(([x, w, h], i) => {
+    blob(scene, hillMat, x, -4, -270 - (i % 2) * 30, w, h, 40);
+  });
+  const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, transparent: true, opacity: 0.92 });
+  [[-90, 70, -300], [40, 85, -320], [150, 60, -280], [-180, 95, -310]].forEach(([x, y, z]) => {
+    blob(scene, cloudMat, x, y, z, 26, 7, 10);
+    blob(scene, cloudMat, x + 16, y + 3, z + 4, 18, 8, 9);
+    blob(scene, cloudMat, x - 14, y + 2, z - 3, 15, 6, 8);
+  });
+
+  // ---------- the road sign: an overhead gantry the outfit keeps driving towards ----------
+  const START_KM = 5;
+  const PRIDE = ['#e40303', '#ff8c00', '#ffed00', '#008026', '#24408e', '#732982'];
+  let km = START_KM;
+  const signTex = canvasTexture(1024, 400, (g, w, h, k) => {
+    const pride = k === 0;   // arrival gets the flag
+    if (pride) {
+      PRIDE.forEach((c, i) => { g.fillStyle = c; g.fillRect(0, Math.floor((i * h) / 6), w, Math.ceil(h / 6)); });
+    } else {
+      g.fillStyle = '#0b6b3a';
+      g.fillRect(0, 0, w, h);
+    }
+    const distance = (k < 0 ? '\u2212' : '') + Math.abs(k) + ' km';
+    g.lineJoin = 'round';
+    const ink = (drawStroke, drawFill) => {   // on the flag, outline the white lettering so it stays readable
+      if (pride) { g.strokeStyle = '#16181c'; g.lineWidth = 14; drawStroke(); }
+      g.fillStyle = '#ffffff';
+      drawFill();
+    };
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 12;
+    const r = 34, m = 16;
+    g.beginPath();
+    g.moveTo(m + r, m); g.arcTo(w - m, m, w - m, h - m, r); g.arcTo(w - m, h - m, m, h - m, r);
+    g.arcTo(m, h - m, m, m, r); g.arcTo(m, m, w - m, m, r); g.closePath();
+    g.stroke();
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    let size = 100;
+    do {
+      size -= 2;
+      g.font = '800 ' + size + 'px Overpass, "Helvetica Neue", Arial, sans-serif';
+    } while (g.measureText('Engineering Excellence').width > w - 110 && size > 40);
+    ink(() => g.strokeText('Engineering Excellence', w / 2, 140), () => g.fillText('Engineering Excellence', w / 2, 140));
+    // straight-ahead arrow, drawn rather than typed so it never depends on a font glyph
+    g.font = '800 104px Overpass, "Helvetica Neue", Arial, sans-serif';
+    const startX = (w - (96 + 34 + g.measureText(distance).width)) / 2;   // centre the arrow and distance together
+    const ax = startX + 48, ay = 286;
+    g.beginPath();
+    g.moveTo(ax, ay - 62); g.lineTo(ax + 48, ay - 4); g.lineTo(ax + 17, ay - 4); g.lineTo(ax + 17, ay + 58);
+    g.lineTo(ax - 17, ay + 58); g.lineTo(ax - 17, ay - 4); g.lineTo(ax - 48, ay - 4); g.closePath();
+    ink(() => g.stroke(), () => g.fill());
+    g.textAlign = 'left';
+    ink(() => g.strokeText(distance, startX + 130, 292), () => g.fillText(distance, startX + 130, 292));
+    // white border last, so it sits over the stripes
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 12;
+    g.beginPath();
+    g.moveTo(m + r, m); g.arcTo(w - m, m, w - m, h - m, r); g.arcTo(w - m, h - m, m, h - m, r);
+    g.arcTo(m, h - m, m, m, r); g.arcTo(m, m, w - m, m, r); g.closePath();
+    g.stroke();
+  });
+  signTex.redraw(km);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => signTex.redraw(km));
+
+  const gantry = new THREE.Group();
+  const steel = mat(0x8d949c, { metalness: 0.15, roughness: 0.6 });
+  mesh(gantry, new THREE.BoxGeometry(0.28, 6.2, 0.28), steel, ROAD_X - 4.9, 3.1, 0);
+  mesh(gantry, new THREE.BoxGeometry(0.28, 6.2, 0.28), steel, ROAD_X + 4.9, 3.1, 0);
+  mesh(gantry, new THREE.BoxGeometry(10.1, 0.22, 0.22), steel, ROAD_X, 6.1, 0);
+  mesh(gantry, new THREE.BoxGeometry(10.1, 0.22, 0.22), steel, ROAD_X, 4.5, 0);
+  mesh(gantry, new THREE.BoxGeometry(7.3, 2.95, 0.1), mat(0x2b3138), ROAD_X, 5.3, 0.08);
+  mesh(gantry, new THREE.PlaneGeometry(7.1, 2.77), new THREE.MeshBasicMaterial({ map: signTex }), ROAD_X, 5.3, 0.14);
+  world.add(gantry);
+  const SIGN_START = -42;
+
+  // ---------- the outfit: bike, sidecar, rider, dog ----------
+  const rig = new THREE.Group();
+  scene.add(rig);
+
+  const paint = mat(0x1f5f4a, { roughness: 0.35, metalness: 0.3 });   // racing green
+  const cream = mat(0xf2ead8, { roughness: 0.5 });
+  const chrome = mat(0xd9dde2, { roughness: 0.2, metalness: 0.9 });
+  const darkMetal = mat(0x2a2d32, { roughness: 0.5, metalness: 0.6 });
+  const rubber = mat(0x15161a, { roughness: 0.9 });
+  const leather = mat(0x1d1f24, { roughness: 0.6 });
+
+  const wheels = [];
+  function wheel(x, y, z) {
+    const w = new THREE.Group();
+    const tyre = mesh(w, new THREE.TorusGeometry(0.27, 0.075, 12, 32), rubber);
+    tyre.rotation.y = Math.PI / 2;
+    const rim = mesh(w, new THREE.TorusGeometry(0.2, 0.02, 8, 28), chrome);
+    rim.rotation.y = Math.PI / 2;
+    const hub = mesh(w, new THREE.CylinderGeometry(0.05, 0.05, 0.14, 12), chrome);
+    hub.rotation.z = Math.PI / 2;
+    for (let i = 0; i < 6; i++) {
+      const spoke = mesh(w, new THREE.BoxGeometry(0.012, 0.4, 0.012), chrome);
+      spoke.rotation.x = (i * Math.PI) / 6;
+    }
+    w.position.set(x, y, z);
+    rig.add(w);
+    wheels.push(w);
+    return w;
+  }
+  function fender(x, y, z, tilt, arc, material) {
+    const holder = new THREE.Group();
+    const f = mesh(holder, new THREE.TorusGeometry(0.37, 0.05, 8, 18, arc), material);
+    f.rotation.y = Math.PI / 2;
+    f.scale.z = 2.2;   // widen the tube across the wheel
+    holder.rotation.x = tilt;
+    holder.position.set(x, y, z);
+    rig.add(holder);
+  }
+
+  // Bike. It faces -Z; front wheel at z -0.75, rear at z +0.7.
+  wheel(0, 0.345, -0.75);
+  wheel(0, 0.345, 0.7);
+  fender(0, 0.345, -0.75, 0.55, Math.PI * 0.6, paint);
+  fender(0, 0.345, 0.7, 1.15, Math.PI * 0.6, paint);
+  mesh(rig, new THREE.BoxGeometry(0.3, 0.3, 0.46), darkMetal, 0, 0.44, 0.02);                 // crankcase
+  for (const x of [-0.085, 0.085]) {                                                          // the parallel twin
+    rod(rig, [x, 0.56, -0.06], [x, 0.8, -0.14], 0.078, chrome);
+    for (let i = 0; i < 4; i++) rod(rig, [x, 0.6 + i * 0.045, -0.073 - i * 0.015], [x, 0.612 + i * 0.045, -0.077 - i * 0.015], 0.098, darkMetal);
+  }
+  blob(rig, paint, 0, 0.9, -0.16, 0.19, 0.14, 0.34);                                          // tank
+  blob(rig, cream, 0, 0.905, -0.16, 0.194, 0.05, 0.3);                                        // tank stripe
+  mesh(rig, new THREE.BoxGeometry(0.3, 0.09, 0.62), leather, 0, 0.84, 0.42);                  // seat
+  rod(rig, [0, 0.82, -0.42], [0, 0.42, -0.22], 0.035, darkMetal);                             // frame downtube
+  rod(rig, [0, 0.8, 0.1], [0, 0.345, 0.7], 0.03, darkMetal);                                  // swingarm line
+  rod(rig, [0, 0.82, 0.6], [0, 0.345, 0.7], 0.022, chrome);                                   // rear shock
+  for (const x of [-0.1, 0.1]) rod(rig, [x, 1.04, -0.5], [x, 0.345, -0.75], 0.028, chrome);   // forks
+  rod(rig, [-0.38, 1.08, -0.46], [0.38, 1.08, -0.46], 0.018, chrome);                         // handlebar
+  for (const x of [-1, 1]) rod(rig, [x * 0.3, 1.08, -0.46], [x * 0.4, 1.08, -0.46], 0.026, rubber);
+  for (const x of [-1, 1]) blob(rig, chrome, x * 0.36, 1.2, -0.44, 0.05, 0.035, 0.01);        // mirrors
+  for (const x of [-1, 1]) rod(rig, [x * 0.33, 1.08, -0.46], [x * 0.36, 1.2, -0.44], 0.007, chrome);
+  const lamp = blob(rig, mat(0xfff6cf, { emissive: 0xffe9a0, emissiveIntensity: 0.9 }), 0, 0.98, -0.6, 0.085, 0.085, 0.05);
+  blob(rig, chrome, 0, 0.98, -0.57, 0.095, 0.095, 0.07);
+  lamp.renderOrder = 1;
+  rod(rig, [-0.19, 0.5, -0.08], [-0.2, 0.3, 0.1], 0.03, chrome);                              // exhaust header
+  rod(rig, [-0.2, 0.3, 0.1], [-0.22, 0.34, 1.0], 0.045, chrome, 0.055);                       // silencer
+  mesh(rig, new THREE.BoxGeometry(0.12, 0.06, 0.04), mat(0xc81e1e, { emissive: 0x7a0c0c }), 0, 0.78, 0.99);
+  const plateTex = canvasTexture(256, 128, (g, w, h) => {
+    g.fillStyle = '#f7d21a'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#111'; g.lineWidth = 8; g.strokeRect(6, 6, w - 12, h - 12);
+    g.fillStyle = '#111'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '800 64px "Helvetica Neue", Arial, sans-serif';
+    g.fillText('EE 650', w / 2, h / 2 + 4);
+  });
+  plateTex.redraw();
+  mesh(rig, new THREE.PlaneGeometry(0.24, 0.12), new THREE.MeshBasicMaterial({ map: plateTex }), 0, 0.66, 1.03);
+  mesh(rig, new THREE.BoxGeometry(0.25, 0.13, 0.01), darkMetal, 0, 0.66, 1.022);
+
+  // Sidecar on the right.
+  const SX = 0.98;
+  blob(rig, paint, SX, 0.56, -0.05, 0.4, 0.3, 1.02);                                          // tub
+  blob(rig, cream, SX, 0.58, -0.05, 0.404, 0.05, 1.0);                                        // waistline stripe
+  blob(rig, mat(0x0e0f12, { roughness: 1 }), SX, 0.83, 0.22, 0.31, 0.05, 0.5);                 // cockpit opening
+  const screen = mesh(rig, new THREE.PlaneGeometry(0.52, 0.3),
+    mat(0xbfe3ff, { transparent: true, opacity: 0.35, roughness: 0.1, side: THREE.DoubleSide }), SX, 0.98, -0.26);
+  screen.rotation.x = -0.5;
+  blob(rig, mat(0xfff6cf, { emissive: 0xffe9a0, emissiveIntensity: 0.8 }), SX, 0.6, -1.05, 0.06, 0.06, 0.04);
+  wheel(SX + 0.5, 0.345, 0.2);
+  fender(SX + 0.5, 0.345, 0.2, 0.85, Math.PI * 0.6, paint);
+  rod(rig, [0.12, 0.42, -0.3], [SX - 0.2, 0.4, -0.3], 0.025, darkMetal);                      // mounting struts
+  rod(rig, [0.12, 0.42, 0.45], [SX - 0.2, 0.4, 0.45], 0.025, darkMetal);
+  rod(rig, [0.1, 0.8, 0.1], [SX - 0.3, 0.62, 0.1], 0.02, darkMetal);
+  rod(rig, [SX, 0.345, 0.2], [SX + 0.5, 0.345, 0.2], 0.025, darkMetal);
+
+  // Rider.
+  const skin = mat(0xf0c8a4, { roughness: 0.8 });
+  const denim = mat(0x2f4f7c, { roughness: 0.9 });
+  const blonde = mat(0xb39a45, { roughness: 0.6 });
+  const rider = new THREE.Group();
+  rig.add(rider);
+  // Torso in three tapered sections (hips, waist, shoulders) rather than one tube, flattened front to back.
+  const flat = (m) => { m.scale.z = 0.78; return m; };
+  flat(rod(rider, [0, 0.92, 0.36], [0, 1.13, 0.27], 0.165, leather, 0.118));                  // hips up to the waist
+  flat(rod(rider, [0, 1.13, 0.27], [0, 1.35, 0.17], 0.118, leather, 0.16));                   // waist up to the chest
+  flat(rod(rider, [0, 1.35, 0.17], [0, 1.45, 0.12], 0.16, leather, 0.1));                     // shoulder slope
+  blob(rider, leather, 0, 1.41, 0.135, 0.205, 0.055, 0.095);                                  // shoulders
+  blob(rider, leather, 0, 1.3, 0.125, 0.145, 0.095, 0.095);                                   // jacket front
+  blob(rider, leather, 0, 0.92, 0.38, 0.195, 0.12, 0.17);                                     // hips
+  const belt = mesh(rider, new THREE.TorusGeometry(0.12, 0.017, 8, 24), mat(0x9b6a3a, { roughness: 0.6 }), 0, 1.13, 0.27);
+  belt.rotation.x = Math.PI / 2 - 0.42;
+  belt.scale.y = 0.8;
+  blob(rider, chrome, 0, 1.135, 0.172, 0.022, 0.02, 0.008);                                   // buckle
+  for (const s of [-1, 1]) {
+    rod(rider, [s * 0.19, 1.4, 0.12], [s * 0.3, 1.16, -0.14], 0.05, leather, 0.04);           // upper arm
+    rod(rider, [s * 0.3, 1.16, -0.14], [s * 0.35, 1.09, -0.44], 0.04, leather, 0.033);        // forearm
+    blob(rider, leather, s * 0.35, 1.09, -0.46, 0.05, 0.045, 0.06);                           // glove
+    rod(rider, [s * 0.12, 0.9, 0.34], [s * 0.21, 0.76, -0.06], 0.085, denim, 0.058);          // thigh
+    rod(rider, [s * 0.21, 0.76, -0.06], [s * 0.21, 0.4, 0.06], 0.056, denim, 0.04);           // shin
+    blob(rider, rubber, s * 0.21, 0.36, 0.0, 0.055, 0.05, 0.12);                              // boot
+    rod(rig, [s * 0.1, 0.36, 0.04], [s * 0.26, 0.36, 0.04], 0.015, chrome);                   // footpeg
+  }
+  rod(rider, [0, 1.42, 0.12], [0, 1.52, 0.08], 0.042, skin);                                  // neck
+  const head = new THREE.Group();
+  head.position.set(0, 1.62, 0.05);
+  rider.add(head);
+  blob(head, skin, 0, 0, 0, 0.115, 0.13, 0.12);
+  const helmet = mesh(head, new THREE.SphereGeometry(0.142, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.56), cream, 0, 0.012, 0.012);
+  helmet.rotation.x = 0.28;                                                                   // open-face, tipped back a touch
+  const stripe = mesh(head, new THREE.SphereGeometry(0.144, 24, 16, -0.25 + Math.PI / 2, 0.5, 0, Math.PI * 0.56), paint, 0, 0.012, 0.012);
+  stripe.rotation.x = 0.28;
+  mesh(head, new THREE.BoxGeometry(0.2, 0.05, 0.03), mat(0x111317, { roughness: 0.15, metalness: 0.4 }), 0, 0.012, -0.108); // sunglasses
+  blob(head, mat(0xd0707a), 0, -0.062, -0.106, 0.026, 0.009, 0.01);                           // a smile's worth of lipstick
+  // Blonde hair: a soft mass at the nape, then long strands streaming back in the wind.
+  blob(head, blonde, 0, -0.03, 0.07, 0.125, 0.12, 0.09);
+  for (const s of [-1, 1]) blob(head, blonde, s * 0.105, -0.05, 0.02, 0.03, 0.09, 0.06);
+  const strands = [];
+  for (let i = 0; i < 15; i++) {
+    const u = i / 14 - 0.5;
+    const len = 0.55 + 0.25 * Math.cos(u * 3) + (i % 3) * 0.06;
+    const geo = new THREE.ConeGeometry(0.062, len, 8);
+    geo.translate(0, len / 2, 0);                                                             // pivot at the root
+    const strand = mesh(head, geo, blonde, u * 0.19, -0.03 - (i % 3) * 0.03, 0.09);
+    strands.push({ m: strand, spread: -u * 0.28, phase: i * 1.7, droop: 0.28 + (i % 3) * 0.13 });
+  }
+
+  // German shepherd, sitting up in the sidecar. Built at unit scale, then sized up: 45 kg is a big dog.
+  const tan = mat(0xc98b45, { roughness: 0.9 });
+  const sable = mat(0x1e1814, { roughness: 0.9 });
+  const fawn = mat(0xe3bd80, { roughness: 0.9 });
+  const dog = new THREE.Group();
+  dog.position.set(SX, 0.74, 0.34);
+  dog.scale.setScalar(1.45);
+  rig.add(dog);
+  blob(dog, tan, 0, 0.2, 0.04, 0.2, 0.27, 0.2);                                               // chest and body
+  blob(dog, sable, 0, 0.25, 0.11, 0.195, 0.25, 0.17);                                         // black saddle
+  blob(dog, fawn, 0, 0.2, -0.12, 0.12, 0.17, 0.07);                                           // pale chest
+  for (const s of [-1, 1]) {
+    rod(dog, [s * 0.1, 0.22, -0.1], [s * 0.1, 0.07, -0.25], 0.04, tan);                       // forelegs up on the rim
+    blob(dog, fawn, s * 0.1, 0.065, -0.27, 0.045, 0.035, 0.06);                               // paws
+  }
+  rod(dog, [0, 0.36, 0.02], [0, 0.6, -0.05], 0.1, tan, 0.085);                                // neck
+  const collar = mesh(dog, new THREE.TorusGeometry(0.098, 0.016, 8, 20), mat(0xc81e1e), 0, 0.47, -0.012);
+  collar.rotation.x = Math.PI / 2 - 0.28;
+  blob(dog, chrome, 0, 0.44, -0.115, 0.02, 0.02, 0.008);                                      // tag
+  const dogHead = new THREE.Group();
+  dogHead.position.set(0, 0.68, -0.07);
+  dog.add(dogHead);
+  blob(dogHead, tan, 0, 0, 0, 0.12, 0.115, 0.13);
+  blob(dogHead, sable, 0, 0.055, 0.02, 0.09, 0.07, 0.1);                                      // dark crown
+  rod(dogHead, [0, -0.025, -0.08], [0, -0.045, -0.27], 0.062, sable, 0.042);                  // long black muzzle
+  blob(dogHead, mat(0x0a0a0a, { roughness: 0.3 }), 0, -0.035, -0.285, 0.03, 0.025, 0.022);    // nose
+  rod(dogHead, [0, -0.075, -0.09], [0, -0.105, -0.24], 0.04, sable, 0.028);                   // open lower jaw
+  const tongue = mesh(dogHead, new THREE.BoxGeometry(0.045, 0.012, 0.13), mat(0xf07a94, { roughness: 0.5 }), 0, -0.08, -0.2);
+  tongue.geometry.translate(0, 0, -0.04);
+  const ears = [];
+  for (const s of [-1, 1]) {
+    const ear = new THREE.Group();
+    ear.position.set(s * 0.07, 0.085, 0.03);
+    const outer = mesh(ear, new THREE.ConeGeometry(0.052, 0.17, 4), sable, 0, 0.085, 0);
+    outer.scale.z = 0.5;
+    const inner = mesh(ear, new THREE.ConeGeometry(0.034, 0.12, 4), fawn, 0, 0.07, -0.016);
+    inner.scale.z = 0.3;
+    ear.rotation.z = -s * 0.2;
+    dogHead.add(ear);
+    ears.push({ ear, s });
+  }
+  // Doggles, because nobody rides at 80 km/h with their eyes open.
+  const lens = mat(0x1a2533, { roughness: 0.1, metalness: 0.6 });
+  const strapMat = mat(0xe07a1f);
+  for (const s of [-1, 1]) {
+    rod(dogHead, [s * 0.052, 0.03, -0.1], [s * 0.052, 0.022, -0.135], 0.043, strapMat);
+    rod(dogHead, [s * 0.052, 0.022, -0.134], [s * 0.052, 0.02, -0.142], 0.036, lens);
+  }
+  const strap = mesh(dogHead, new THREE.TorusGeometry(0.122, 0.012, 6, 24), strapMat, 0, 0.03, 0);
+  strap.rotation.x = Math.PI / 2;
+  strap.scale.y = 1.08;
+
+  // Loose bits for the wind to catch: jowls either side of the muzzle and a ruff of fur down the neck.
+  const jowls = [];
+  for (const sd of [-1, 1]) {
+    const pivot = new THREE.Group();
+    pivot.position.set(sd * 0.04, -0.06, -0.22);
+    blob(pivot, sable, 0, 0, 0.055, 0.012, 0.034, 0.06);
+    dogHead.add(pivot);
+    jowls.push({ m: pivot, s: sd });
+  }
+  const tufts = [];
+  for (let i = 0; i < 9; i++) {
+    const u = i / 8 - 0.5;
+    const len = 0.13 + (i % 3) * 0.035;
+    const geo = new THREE.ConeGeometry(0.034, len, 6);
+    geo.translate(0, len / 2, 0);
+    const onHead = i % 2 === 0;
+    const tuft = mesh(onHead ? dogHead : dog, geo, i % 3 ? tan : sable,
+      u * 0.17, onHead ? 0.03 - Math.abs(u) * 0.08 : 0.5 - (i % 3) * 0.06, onHead ? 0.1 : 0.1 + (i % 3) * 0.02);
+    tufts.push({ m: tuft, spread: -u * 0.5, phase: i * 2.1, lift: (i % 3) * 0.12 });
+  }
+
+  rig.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  screen.castShadow = false;
+
+  // ---------- camera: drag to orbit, pinch or wheel to zoom ----------
+  const target = new THREE.Vector3(0.45, 1.5, -1.4);
+  const view = { az: 0.5, el: 0.2, dist: 9.2 };
+  let dragging = false, lastInput = -10;
+  const pointers = new Map();
+  let pinch = 0;
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    dragging = true;
+    pinch = 0;
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (pointers.size === 1) {
+      view.az -= dx * 0.006;
+      view.el = Math.max(0.03, Math.min(0.55, view.el + dy * 0.004));
+    } else if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch) view.dist = Math.max(4.5, Math.min(16, view.dist * (pinch / d)));
+      pinch = d;
+    }
+    lastInput = now();
+  });
+  const release = (e) => { pointers.delete(e.pointerId); pinch = 0; dragging = pointers.size > 0; };
+  canvas.addEventListener('pointerup', release);
+  canvas.addEventListener('pointercancel', release);
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    view.dist = Math.max(4.5, Math.min(16, view.dist * (1 + e.deltaY * 0.001)));
+  }, { passive: false });
+
+  function resize() {
+    const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    // Portrait phones need a wider lens to keep the outfit and the gantry in frame together.
+    const portrait = w < h;
+    baseFov.value = portrait ? 60 : 42;
+    if (lastInput < 0) {   // nobody has moved the camera yet, so pick the framing for this shape
+      view.az = portrait ? 0.2 : 0.5;
+      view.dist = portrait ? 10.5 : 9.2;
+      target.set(portrait ? -0.3 : 0.45, portrait ? 2.1 : 1.5, -1.4);
+    }
+  }
+  new ResizeObserver(resize).observe(canvas);
+  resize();
+
+  // ---------- driving: accelerator, brake, speed cameras ----------
+  const LIMIT_KMH = 125, TOP_KMH = 170, CRUISE_KMH = 80;
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const t0 = performance.now();
+  function now() { return (performance.now() - t0) / 1000; }
+
+  const pedals = { gas: false, brake: false };
+  function bindPedal(id, key) {
+    const el = document.getElementById(id);
+    const set = (on) => { pedals[key] = on; el.classList.toggle('down', on); };
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); set(true); });
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(type, () => set(false));
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    return set;
+  }
+  const setGas = bindPedal('gas', 'gas'), setBrake = bindPedal('brake', 'brake');
+  const keyFor = (e) => (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') ? setGas
+    : (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S' || e.key === ' ') ? setBrake : null;
+  window.addEventListener('keydown', (e) => { const k = keyFor(e); if (k) { e.preventDefault(); k(true); } });
+  window.addEventListener('keyup', (e) => { const k = keyFor(e); if (k) k(false); });
+  window.addEventListener('blur', () => { setGas(false); setBrake(false); });
+
+  // Speed camera: a yellow box on a pole that turns up at random distances along the verge.
+  const speedCam = new THREE.Group();
+  const camYellow = mat(0xf7c400, { roughness: 0.5 });
+  const camFlashMat = mat(0x222428, { emissive: 0xffffff, emissiveIntensity: 0 });
+  mesh(speedCam, new THREE.CylinderGeometry(0.07, 0.09, 2.5, 10), mat(0x8d949c), 0, 1.25, 0);
+  mesh(speedCam, new THREE.BoxGeometry(0.62, 0.8, 0.5), camYellow, 0, 2.85, 0);
+  mesh(speedCam, new THREE.BoxGeometry(0.5, 0.3, 0.02), mat(0x15171b, { roughness: 0.2 }), 0, 3.0, 0.26);
+  mesh(speedCam, new THREE.BoxGeometry(0.5, 0.2, 0.02), camFlashMat, 0, 2.66, 0.26);
+  for (const x of [-0.12, 0.12]) {
+    const lensRing = mesh(speedCam, new THREE.CylinderGeometry(0.075, 0.075, 0.03, 16), mat(0x3a4048, { metalness: 0.5, roughness: 0.3 }), x, 3.0, 0.275);
+    lensRing.rotation.x = Math.PI / 2;
+  }
+  for (let i = 0; i < 4; i++) mesh(speedCam, new THREE.BoxGeometry(0.63, 0.06, 0.51), mat(0x15171b), 0, 0.55 + i * 0.22, 0).scale.set(0.3, 1, 0.42);
+  speedCam.position.x = ROAD_X + 5.0;
+  speedCam.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  world.add(speedCam);
+
+  const speedEl = document.getElementById('speed'), speedoEl = document.getElementById('speedo');
+  const togoEl = document.getElementById('togo'), ticketsEl = document.getElementById('tickets');
+  const toastEl = document.getElementById('toast'), flashEl = document.getElementById('flash');
+  let toastTimer = 0;
+  function toast(text, bad) {
+    toastEl.textContent = text;
+    toastEl.classList.toggle('bad', !!bad);
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, 2800);
+  }
+
+  let v = CRUISE_KMH / 3.6;          // metres per second
+  let travelled = 0, lastT = now(), flapPhase = 0, pitch = 0;
+  let camAt = 320 + Math.random() * 260, camChecked = false, camGlow = 0, tickets = 0;
+  let togoText = '', speedText = '';
+
+  function frame() {
+    const t = now();
+    const dt = Math.min(t - lastT, 1);   // slow frames still count in full; only a long gap (backgrounded tab) is skipped
+    lastT = t;
+
+    // Holding neither pedal keeps your speed: it's a cruise, so the scene never rolls to a halt by itself.
+    const top = TOP_KMH / 3.6;
+    if (pedals.brake) v -= 16 * dt;
+    else if (pedals.gas) v += 9 * (1 - v / top) * dt + 0.4 * dt;
+    v = Math.max(0, Math.min(top, v));
+    travelled += v * dt;
+    const kmh = Math.round(v * 3.6);
+    const f = v / (LIMIT_KMH / 3.6);   // 1.0 at the limit
+
+    for (const s of scrollers) {
+      s.obj.position.z = ((s.baseZ + travelled) % SPAN + SPAN) % SPAN - SPAN + 20;
+    }
+    // A gantry stands every 250 m, and each one states the distance from itself, like a real sign:
+    // 5, 4.75, 4.5 ... so no two in a row ever read the same. The 0 km gantry is the pride one, and
+    // they keep counting past zero on purpose: Engineering Excellence is a place you drive through,
+    // not a place you stop.
+    const lap = Math.floor((travelled + 192) / 250);
+    gantry.position.z = SIGN_START + travelled - 250 * lap;
+    const kmNow = START_KM - 0.25 * lap;
+    if (kmNow !== km) { km = kmNow; signTex.redraw(km); }
+    const remaining = START_KM - (travelled + SIGN_START) / 1000;   // a round figure exactly under each gantry
+    const text = (remaining < -0.005 ? '\u2212' : '') + Math.abs(remaining).toFixed(2) + ' km';
+    if (text !== togoText) { togoText = text; togoEl.textContent = text; }
+    if (String(kmh) !== speedText) {
+      speedText = String(kmh);
+      speedEl.textContent = speedText;
+      speedoEl.classList.toggle('over', kmh > LIMIT_KMH);
+    }
+
+    // Speed camera: check your speed as you pass it, then schedule the next one somewhere random.
+    const camDist = camAt - travelled;
+    speedCam.position.z = -camDist;
+    speedCam.visible = camDist < 340;
+    if (!camChecked && camDist <= 0) {
+      camChecked = true;
+      if (kmh > LIMIT_KMH) {
+        tickets += 1;
+        ticketsEl.textContent = tickets;
+        camGlow = 1;
+        flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go');
+        toast('Flash! ' + kmh + ' km/h in a ' + LIMIT_KMH + ' zone', true);
+      } else {
+        toast('Speed camera passed at ' + kmh + ' km/h. Clean.');
+      }
+    }
+    if (camDist < -30) { camAt = travelled + 380 + Math.random() * 900; camChecked = false; }
+    camGlow = Math.max(0, camGlow - dt * 3);
+    camFlashMat.emissiveIntensity = camGlow * 4;
+
+    const spin = -travelled / 0.345;
+    for (const w of wheels) w.rotation.x = spin % (Math.PI * 2);
+
+    // Wind: everything loose flaps faster and harder the quicker you go, and hangs limp at a standstill.
+    flapPhase += dt * (2.5 + 15 * f);
+    const wind = Math.min(f, 1.4), blow = Math.min(1, f * 1.5);
+    const ph = flapPhase;
+    rig.position.y = (Math.sin(t * 11) * 0.006 + Math.sin(t * 2.3) * 0.005) * (0.3 + wind);
+    rig.rotation.z = Math.sin(t * 1.1) * 0.008 * (0.3 + wind);
+    const wantPitch = pedals.brake && v > 0.5 ? -0.04 : pedals.gas && v < top - 0.5 ? 0.022 : 0;
+    pitch += (wantPitch - pitch) * Math.min(1, dt * 6);
+    rig.rotation.x = pitch;
+
+    for (const s of strands) {
+      const hanging = Math.PI - 0.1 - s.droop * 0.2, streaming = Math.PI / 2 + s.droop * (1.1 - 0.6 * blow);
+      s.m.rotation.x = hanging + (streaming - hanging) * blow + Math.sin(ph + s.phase) * (0.02 + 0.2 * wind);
+      s.m.rotation.z = s.spread * (0.3 + 0.7 * blow) + Math.sin(ph * 0.8 + s.phase * 1.3) * 0.16 * wind;
+    }
+    head.rotation.y = Math.sin(t * 0.4) * 0.12;
+
+    dogHead.rotation.y = Math.sin(t * 0.7) * 0.35;
+    dogHead.rotation.z = Math.sin(t * 0.9 + 1) * 0.1 + Math.sin(ph * 0.9) * 0.03 * wind;
+    dogHead.rotation.x = -0.1 - 0.12 * wind + Math.sin(t * 1.7) * 0.05;
+    for (const e of ears) {
+      e.ear.rotation.x = 0.05 + 0.75 * blow + Math.sin(ph * 2.3 + e.s) * 0.3 * wind;   // pinned back and fluttering
+      e.ear.rotation.z = -e.s * 0.2 + Math.sin(ph * 1.9 + e.s * 2) * 0.18 * wind;
+    }
+    tongue.scale.z = 1 + 1.1 * wind;                                                    // more tongue at speed
+    tongue.rotation.x = 0.55 - 0.25 * blow + Math.sin(ph * 2) * (0.05 + 0.3 * wind);
+    tongue.rotation.y = Math.sin(ph * 1.3) * 0.7 * wind + 0.5 * blow;
+    for (const j of jowls) j.m.rotation.y = j.s * (0.05 + 0.95 * blow + Math.sin(ph * 2.6 + j.s) * 0.4 * wind);
+    for (const u of tufts) {
+      u.m.rotation.x = 2.5 + (Math.PI / 2 + u.lift - 2.5) * blow + Math.sin(ph * 1.7 + u.phase) * (0.03 + 0.3 * wind);   // flat at rest, streaming at speed
+      u.m.rotation.z = u.spread + Math.sin(ph * 1.3 + u.phase) * 0.25 * wind;
+    }
+
+    camera.fov = baseFov.value + 7 * Math.min(f, 1.4);   // the lens widens a little as you speed up
+    camera.updateProjectionMatrix();
+
+    // Idle sway until someone takes the camera.
+    const idle = !dragging && t - lastInput > 4 && !reduceMotion;
+    const az = view.az + (idle ? Math.sin(t * 0.25) * 0.1 : 0);
+    const ce = Math.cos(view.el);
+    camera.position.set(
+      target.x + view.dist * Math.sin(az) * ce,
+      target.y + view.dist * Math.sin(view.el),
+      target.z + view.dist * Math.cos(az) * ce
+    );
+    camera.lookAt(target);
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>
