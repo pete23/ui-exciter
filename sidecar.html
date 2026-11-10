@@ -163,6 +163,14 @@
     dash.position.set(ROAD_X, 0.011, 0);
     scroller(dash, -i * 8);
   }
+  // Tar seams across the carriageway, so the surface itself visibly rushes past.
+  const seamMat = new THREE.MeshBasicMaterial({ color: 0x2c2f33 });
+  for (let i = 0; i < 20; i++) {
+    const seam = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 0.12 + (i % 3) * 0.05), seamMat);
+    seam.rotation.x = -Math.PI / 2;
+    seam.position.set(ROAD_X, 0.006, 0);
+    scroller(seam, -i * 14 - (i % 4) * 2.5);
+  }
   const trunkMat = mat(0x6b4a2f), leafMats = [mat(0x2f7a45), mat(0x3b8c4c), mat(0x2a6a3d)];
   for (let i = 0; i < 34; i++) {
     const tree = new THREE.Group();
@@ -197,11 +205,24 @@
   });
 
   // ---------- the road sign: an overhead gantry the outfit keeps driving towards ----------
-  const DISTANCES = ['5 km', '4 km', '3 km', '2 km', '1 km', '500 m'];
-  let distanceIndex = 0;
-  const signTex = canvasTexture(1024, 400, (g, w, h, distance) => {
-    g.fillStyle = '#0b6b3a';
-    g.fillRect(0, 0, w, h);
+  const START_KM = 5, SECONDS_PER_KM = 30;
+  const PRIDE = ['#e40303', '#ff8c00', '#ffed00', '#008026', '#24408e', '#732982'];
+  let km = START_KM;
+  const signTex = canvasTexture(1024, 400, (g, w, h, k) => {
+    const pride = k === 0;   // arrival gets the flag
+    if (pride) {
+      PRIDE.forEach((c, i) => { g.fillStyle = c; g.fillRect(0, Math.floor((i * h) / 6), w, Math.ceil(h / 6)); });
+    } else {
+      g.fillStyle = '#0b6b3a';
+      g.fillRect(0, 0, w, h);
+    }
+    const distance = (k < 0 ? '\u2212' + -k : k) + ' km';
+    g.lineJoin = 'round';
+    const ink = (drawStroke, drawFill) => {   // on the flag, outline the white lettering so it stays readable
+      if (pride) { g.strokeStyle = '#16181c'; g.lineWidth = 14; drawStroke(); }
+      g.fillStyle = '#ffffff';
+      drawFill();
+    };
     g.strokeStyle = '#ffffff';
     g.lineWidth = 12;
     const r = 34, m = 16;
@@ -209,7 +230,6 @@
     g.moveTo(m + r, m); g.arcTo(w - m, m, w - m, h - m, r); g.arcTo(w - m, h - m, m, h - m, r);
     g.arcTo(m, h - m, m, m, r); g.arcTo(m, m, w - m, m, r); g.closePath();
     g.stroke();
-    g.fillStyle = '#ffffff';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     let size = 100;
@@ -217,19 +237,26 @@
       size -= 2;
       g.font = '800 ' + size + 'px Overpass, "Helvetica Neue", Arial, sans-serif';
     } while (g.measureText('Engineering Excellence').width > w - 110 && size > 40);
-    g.fillText('Engineering Excellence', w / 2, 140);
+    ink(() => g.strokeText('Engineering Excellence', w / 2, 140), () => g.fillText('Engineering Excellence', w / 2, 140));
     // straight-ahead arrow, drawn rather than typed so it never depends on a font glyph
     const ax = w / 2 - 150, ay = 286;
     g.beginPath();
     g.moveTo(ax, ay - 62); g.lineTo(ax + 48, ay - 4); g.lineTo(ax + 17, ay - 4); g.lineTo(ax + 17, ay + 58);
     g.lineTo(ax - 17, ay + 58); g.lineTo(ax - 17, ay - 4); g.lineTo(ax - 48, ay - 4); g.closePath();
-    g.fill();
+    ink(() => g.stroke(), () => g.fill());
     g.font = '800 104px Overpass, "Helvetica Neue", Arial, sans-serif';
     g.textAlign = 'left';
-    g.fillText(distance, w / 2 - 70, 292);
+    ink(() => g.strokeText(distance, w / 2 - 70, 292), () => g.fillText(distance, w / 2 - 70, 292));
+    // white border last, so it sits over the stripes
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 12;
+    g.beginPath();
+    g.moveTo(m + r, m); g.arcTo(w - m, m, w - m, h - m, r); g.arcTo(w - m, h - m, m, h - m, r);
+    g.arcTo(m, h - m, m, m, r); g.arcTo(m, m, w - m, m, r); g.closePath();
+    g.stroke();
   });
-  signTex.redraw(DISTANCES[0]);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => signTex.redraw(DISTANCES[distanceIndex]));
+  signTex.redraw(km);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => signTex.redraw(km));
 
   const gantry = new THREE.Group();
   const steel = mat(0x8d949c, { metalness: 0.15, roughness: 0.6 });
@@ -323,7 +350,7 @@
   const SX = 0.98;
   blob(rig, paint, SX, 0.56, -0.05, 0.4, 0.3, 1.02);                                          // tub
   blob(rig, cream, SX, 0.58, -0.05, 0.404, 0.05, 1.0);                                        // waistline stripe
-  blob(rig, mat(0x0e0f12, { roughness: 1 }), SX, 0.83, 0.2, 0.29, 0.05, 0.4);                 // cockpit opening
+  blob(rig, mat(0x0e0f12, { roughness: 1 }), SX, 0.83, 0.22, 0.31, 0.05, 0.5);                 // cockpit opening
   const screen = mesh(rig, new THREE.PlaneGeometry(0.52, 0.3),
     mat(0xbfe3ff, { transparent: true, opacity: 0.35, roughness: 0.1, side: THREE.DoubleSide }), SX, 0.98, -0.26);
   screen.rotation.x = -0.5;
@@ -338,7 +365,7 @@
   // Rider.
   const skin = mat(0xf0c8a4, { roughness: 0.8 });
   const denim = mat(0x2f4f7c, { roughness: 0.9 });
-  const blonde = mat(0xd4a93f, { roughness: 0.6 });
+  const blonde = mat(0xb39a45, { roughness: 0.6 });
   const rider = new THREE.Group();
   rig.add(rider);
   rod(rider, [0, 0.9, 0.36], [0, 1.44, 0.12], 0.17, leather, 0.19);                           // torso, leaning in
@@ -381,8 +408,8 @@
   const sable = mat(0x1e1814, { roughness: 0.9 });
   const fawn = mat(0xe3bd80, { roughness: 0.9 });
   const dog = new THREE.Group();
-  dog.position.set(SX, 0.76, 0.22);
-  dog.scale.setScalar(1.18);
+  dog.position.set(SX, 0.74, 0.34);
+  dog.scale.setScalar(1.45);
   rig.add(dog);
   blob(dog, tan, 0, 0.2, 0.04, 0.2, 0.27, 0.2);                                               // chest and body
   blob(dog, sable, 0, 0.25, 0.11, 0.195, 0.25, 0.17);                                         // black saddle
@@ -491,7 +518,7 @@
   function frame() {
     const dt = Math.min(clock.getDelta(), 0.05);
     const t = clock.elapsedTime;
-    const speed = reduceMotion ? 0 : SPEED;
+    const speed = SPEED;
     travelled += speed * dt;
 
     for (const s of scrollers) {
@@ -500,8 +527,10 @@
     signZ += speed * dt;
     if (signZ > 16) {
       signZ -= 250;
-      distanceIndex = (distanceIndex + 1) % DISTANCES.length;
-      signTex.redraw(DISTANCES[distanceIndex]);
+      // Each new gantry shows the distance left at the moment it appears. It keeps counting past zero
+      // on purpose: Engineering Excellence is a place you drive through, not a place you stop.
+      km = START_KM - Math.floor(travelled / SPEED / SECONDS_PER_KM);
+      signTex.redraw(km);
     }
     gantry.position.z = signZ;
 
