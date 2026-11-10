@@ -42,12 +42,59 @@
   .caption .togo strong { font-variant-numeric: tabular-nums; }
   .hint {
     position: absolute;
-    bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 104px);
     left: 0; right: 0;
     text-align: center;
     font-size: 0.8rem;
     pointer-events: none;
+    animation: hintfade 0.8s ease 7s forwards;
   }
+  @keyframes hintfade { to { opacity: 0; } }
+
+  /* Driving controls: brake under the left thumb, accelerator under the right, speed between them */
+  .hud {
+    position: absolute;
+    left: max(16px, env(safe-area-inset-left, 0px));
+    right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: max(14px, env(safe-area-inset-bottom, 0px));
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 10px;
+    pointer-events: none;
+  }
+  .pedal {
+    pointer-events: auto; flex: none;
+    width: 88px; height: 88px; border-radius: 18px;
+    border: 3px solid var(--ink); color: #fff;
+    font: 800 1rem var(--font); letter-spacing: 0.02em;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    cursor: pointer;
+  }
+  .pedal.brake { background: #b3261e; }
+  .pedal.gas { background: var(--sign); }
+  .pedal.down { transform: translateY(3px) scale(0.96); filter: brightness(0.8); }
+  .pedal:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  .speedo {
+    background: var(--panel); border-radius: 14px; padding: 8px 12px;
+    display: flex; align-items: center; gap: 10px; min-width: 0;
+  }
+  .speedo .reading { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; }
+  #speed { font-weight: 800; font-size: 2.3rem; font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
+  .speedo .unit { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .speedo.over #speed { color: #b3261e; }
+  .limit {
+    width: 46px; height: 46px; flex: none; box-sizing: border-box; border-radius: 50%;
+    border: 5px solid #d21f1f; background: #fff; color: #111;
+    display: grid; place-items: center; font-weight: 800; font-size: 0.85rem;
+  }
+  .toast {
+    position: absolute; top: 38%; left: 50%; transform: translateX(-50%);
+    max-width: calc(100% - 48px); box-sizing: border-box;
+    background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 8px;
+    font-weight: 800; text-align: center; pointer-events: none;
+  }
+  .toast.bad { background: #b3261e; }
+  .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+  .flash.go { animation: camflash 0.5s ease-out; }
+  @keyframes camflash { from { opacity: 0.7; } to { opacity: 0; } }
   .hint span { background: var(--panel); color: var(--ink); padding: 4px 12px; border-radius: 999px; }
   #fallback {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -60,9 +107,19 @@
 <div class="caption">
   <h1>Next stop: Engineering Excellence</h1>
   <p>650 cc twin · one rider · one 45 kg German shepherd in the sidecar</p>
-  <p class="togo">Distance to go: <strong id="togo">5.0 km</strong></p>
+  <p class="togo">Distance to go: <strong id="togo">5.0 km</strong> · Camera flashes: <strong id="tickets">0</strong></p>
 </div>
 <div class="hint"><span>Drag to look around · pinch or scroll to zoom</span></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<div id="flash" class="flash"></div>
+<div class="hud">
+  <button id="brake" class="pedal brake" type="button">Brake</button>
+  <div id="speedo" class="speedo">
+    <span class="reading"><span id="speed">80</span><span class="unit">km/h</span></span>
+    <span class="limit" role="img" aria-label="Speed limit 125 kilometres per hour">125</span>
+  </div>
+  <button id="gas" class="pedal gas" type="button">Go</button>
+</div>
 <div id="fallback" hidden>This scene needs WebGL, which isn't available in this browser.</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -83,6 +140,7 @@
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 600);
+  const baseFov = { value: 42 };   // the resting lens; it widens with speed
 
   // ---------- helpers ----------
   const mat = (color, o) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.7, metalness: 0.05 }, o));
@@ -140,7 +198,6 @@
 
   // ---------- world ----------
   const ROAD_X = -1.6;   // road centre; the outfit rides in the right-hand lane
-  const SPEED = 22;      // metres per second, about 80 km/h
   const world = new THREE.Group();
   scene.add(world);
 
@@ -208,7 +265,7 @@
   });
 
   // ---------- the road sign: an overhead gantry the outfit keeps driving towards ----------
-  const START_KM = 5, SECONDS_PER_KM = 30;
+  const START_KM = 5;
   const PRIDE = ['#e40303', '#ff8c00', '#ffed00', '#008026', '#24408e', '#732982'];
   let km = START_KM;
   const signTex = canvasTexture(1024, 400, (g, w, h, k) => {
@@ -458,6 +515,27 @@
   strap.rotation.x = Math.PI / 2;
   strap.scale.y = 1.08;
 
+  // Loose bits for the wind to catch: jowls either side of the muzzle and a ruff of fur down the neck.
+  const jowls = [];
+  for (const sd of [-1, 1]) {
+    const pivot = new THREE.Group();
+    pivot.position.set(sd * 0.04, -0.06, -0.22);
+    blob(pivot, sable, 0, 0, 0.055, 0.012, 0.034, 0.06);
+    dogHead.add(pivot);
+    jowls.push({ m: pivot, s: sd });
+  }
+  const tufts = [];
+  for (let i = 0; i < 9; i++) {
+    const u = i / 8 - 0.5;
+    const len = 0.13 + (i % 3) * 0.035;
+    const geo = new THREE.ConeGeometry(0.034, len, 6);
+    geo.translate(0, len / 2, 0);
+    const onHead = i % 2 === 0;
+    const tuft = mesh(onHead ? dogHead : dog, geo, i % 3 ? tan : sable,
+      u * 0.17, onHead ? 0.03 - Math.abs(u) * 0.08 : 0.5 - (i % 3) * 0.06, onHead ? 0.1 : 0.1 + (i % 3) * 0.02);
+    tufts.push({ m: tuft, spread: -u * 0.5, phase: i * 2.1, lift: (i % 3) * 0.12 });
+  }
+
   rig.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   screen.castShadow = false;
 
@@ -503,8 +581,7 @@
     camera.aspect = w / h;
     // Portrait phones need a wider lens to keep the outfit and the gantry in frame together.
     const portrait = w < h;
-    camera.fov = portrait ? 60 : 42;
-    camera.updateProjectionMatrix();
+    baseFov.value = portrait ? 60 : 42;
     if (lastInput < 0) {   // nobody has moved the camera yet, so pick the framing for this shape
       view.az = portrait ? 0.2 : 0.5;
       view.dist = portrait ? 10.5 : 9.2;
@@ -514,54 +591,153 @@
   new ResizeObserver(resize).observe(canvas);
   resize();
 
-  // ---------- animation ----------
+  // ---------- driving: accelerator, brake, speed cameras ----------
+  const LIMIT_KMH = 125, TOP_KMH = 170, CRUISE_KMH = 80;
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // Everything is a pure function of real elapsed time, so nothing (dragging, a slow frame, a
-  // backgrounded tab) can stall the journey or the countdown.
   const t0 = performance.now();
   function now() { return (performance.now() - t0) / 1000; }
-  const togoEl = document.getElementById('togo');
-  let gantryLap = 0, togoText = '';
+
+  const pedals = { gas: false, brake: false };
+  function bindPedal(id, key) {
+    const el = document.getElementById(id);
+    const set = (on) => { pedals[key] = on; el.classList.toggle('down', on); };
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); set(true); });
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(type, () => set(false));
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    return set;
+  }
+  const setGas = bindPedal('gas', 'gas'), setBrake = bindPedal('brake', 'brake');
+  const keyFor = (e) => (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') ? setGas
+    : (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S' || e.key === ' ') ? setBrake : null;
+  window.addEventListener('keydown', (e) => { const k = keyFor(e); if (k) { e.preventDefault(); k(true); } });
+  window.addEventListener('keyup', (e) => { const k = keyFor(e); if (k) k(false); });
+  window.addEventListener('blur', () => { setGas(false); setBrake(false); });
+
+  // Speed camera: a yellow box on a pole that turns up at random distances along the verge.
+  const speedCam = new THREE.Group();
+  const camYellow = mat(0xf7c400, { roughness: 0.5 });
+  const camFlashMat = mat(0x222428, { emissive: 0xffffff, emissiveIntensity: 0 });
+  mesh(speedCam, new THREE.CylinderGeometry(0.07, 0.09, 2.5, 10), mat(0x8d949c), 0, 1.25, 0);
+  mesh(speedCam, new THREE.BoxGeometry(0.62, 0.8, 0.5), camYellow, 0, 2.85, 0);
+  mesh(speedCam, new THREE.BoxGeometry(0.5, 0.3, 0.02), mat(0x15171b, { roughness: 0.2 }), 0, 3.0, 0.26);
+  mesh(speedCam, new THREE.BoxGeometry(0.5, 0.2, 0.02), camFlashMat, 0, 2.66, 0.26);
+  for (const x of [-0.12, 0.12]) {
+    const lensRing = mesh(speedCam, new THREE.CylinderGeometry(0.075, 0.075, 0.03, 16), mat(0x3a4048, { metalness: 0.5, roughness: 0.3 }), x, 3.0, 0.275);
+    lensRing.rotation.x = Math.PI / 2;
+  }
+  for (let i = 0; i < 4; i++) mesh(speedCam, new THREE.BoxGeometry(0.63, 0.06, 0.51), mat(0x15171b), 0, 0.55 + i * 0.22, 0).scale.set(0.3, 1, 0.42);
+  speedCam.position.x = ROAD_X + 5.0;
+  speedCam.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  world.add(speedCam);
+
+  const speedEl = document.getElementById('speed'), speedoEl = document.getElementById('speedo');
+  const togoEl = document.getElementById('togo'), ticketsEl = document.getElementById('tickets');
+  const toastEl = document.getElementById('toast'), flashEl = document.getElementById('flash');
+  let toastTimer = 0;
+  function toast(text, bad) {
+    toastEl.textContent = text;
+    toastEl.classList.toggle('bad', !!bad);
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, 2800);
+  }
+
+  let v = CRUISE_KMH / 3.6;          // metres per second
+  let travelled = 0, lastT = now(), flapPhase = 0, pitch = 0;
+  let camAt = 320 + Math.random() * 260, camChecked = false, camGlow = 0, tickets = 0;
+  let togoText = '', speedText = '';
+
   function frame() {
     const t = now();
-    const travelled = SPEED * t;
+    const dt = Math.min(t - lastT, 0.25);   // a long gap (backgrounded tab) is skipped, not replayed
+    lastT = t;
+
+    // Holding neither pedal keeps your speed: it's a cruise, so the scene never rolls to a halt by itself.
+    const top = TOP_KMH / 3.6;
+    if (pedals.brake) v -= 16 * dt;
+    else if (pedals.gas) v += 9 * (1 - v / top) * dt + 0.4 * dt;
+    v = Math.max(0, Math.min(top, v));
+    travelled += v * dt;
+    const kmh = Math.round(v * 3.6);
+    const f = v / (LIMIT_KMH / 3.6);   // 1.0 at the limit
 
     for (const s of scrollers) {
       s.obj.position.z = ((s.baseZ + travelled) % SPAN + SPAN) % SPAN - SPAN + 20;
     }
     // A gantry comes round every 250 m.
-    gantryLap = Math.floor((travelled + 192) / 250);
-    gantry.position.z = SIGN_START + travelled - 250 * gantryLap;
+    gantry.position.z = SIGN_START + travelled - 250 * Math.floor((travelled + 192) / 250);
 
-    // The distance drops 1 km every SECONDS_PER_KM, and the sign changes the moment it does. It keeps
-    // counting past zero on purpose: Engineering Excellence is a place you drive through, not a place you stop.
-    const remaining = START_KM - t / SECONDS_PER_KM;
+    // Real kilometres now: the distance falls as fast as you ride. It keeps counting past zero on
+    // purpose: Engineering Excellence is a place you drive through, not a place you stop.
+    const remaining = START_KM - travelled / 1000;
     const kmNow = Math.ceil(remaining - 1e-9);
     if (kmNow !== km) { km = kmNow; signTex.redraw(km); }
-    const text = (remaining < -0.05 ? '\u2212' : '') + Math.abs(remaining).toFixed(1) + ' km';
+    const text = (remaining < -0.05 ? '−' : '') + Math.abs(remaining).toFixed(1) + ' km';
     if (text !== togoText) { togoText = text; togoEl.textContent = text; }
+    if (String(kmh) !== speedText) {
+      speedText = String(kmh);
+      speedEl.textContent = speedText;
+      speedoEl.classList.toggle('over', kmh > LIMIT_KMH);
+    }
+
+    // Speed camera: check your speed as you pass it, then schedule the next one somewhere random.
+    const camDist = camAt - travelled;
+    speedCam.position.z = -camDist;
+    speedCam.visible = camDist < 340;
+    if (!camChecked && camDist <= 0) {
+      camChecked = true;
+      if (kmh > LIMIT_KMH) {
+        tickets += 1;
+        ticketsEl.textContent = tickets;
+        camGlow = 1;
+        flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go');
+        toast('Flash! ' + kmh + ' km/h in a ' + LIMIT_KMH + ' zone', true);
+      } else {
+        toast('Speed camera passed at ' + kmh + ' km/h. Clean.');
+      }
+    }
+    if (camDist < -30) { camAt = travelled + 380 + Math.random() * 900; camChecked = false; }
+    camGlow = Math.max(0, camGlow - dt * 3);
+    camFlashMat.emissiveIntensity = camGlow * 4;
 
     const spin = -travelled / 0.345;
     for (const w of wheels) w.rotation.x = spin % (Math.PI * 2);
 
-    if (!reduceMotion) {
-      rig.position.y = Math.sin(t * 11) * 0.008 + Math.sin(t * 2.3) * 0.006;
-      rig.rotation.z = Math.sin(t * 1.1) * 0.008;
-      for (const s of strands) {
-        s.m.rotation.x = Math.PI / 2 + s.droop + Math.sin(t * 8 + s.phase) * 0.11;
-        s.m.rotation.z = s.spread + Math.sin(t * 6.3 + s.phase * 1.3) * 0.08;
-      }
-      head.rotation.y = Math.sin(t * 0.4) * 0.12;
-      dogHead.rotation.y = Math.sin(t * 0.7) * 0.35;
-      dogHead.rotation.z = Math.sin(t * 0.9 + 1) * 0.1;
-      dogHead.rotation.x = -0.12 + Math.sin(t * 1.7) * 0.05;
-      tongue.rotation.x = 0.5 + Math.sin(t * 16) * 0.25;
-      tongue.rotation.y = Math.sin(t * 9) * 0.2;
-      for (const e of ears) e.ear.rotation.x = 0.12 + Math.sin(t * 19 + e.s) * 0.1;
-    } else {
-      for (const s of strands) { s.m.rotation.x = Math.PI / 2 + s.droop; s.m.rotation.z = s.spread; }
-      tongue.rotation.x = 0.5;
+    // Wind: everything loose flaps faster and harder the quicker you go, and hangs limp at a standstill.
+    flapPhase += dt * (2.5 + 15 * f);
+    const wind = Math.min(f, 1.4), blow = Math.min(1, f * 1.5);
+    const ph = flapPhase;
+    rig.position.y = (Math.sin(t * 11) * 0.006 + Math.sin(t * 2.3) * 0.005) * (0.3 + wind);
+    rig.rotation.z = Math.sin(t * 1.1) * 0.008 * (0.3 + wind);
+    const wantPitch = pedals.brake && v > 0.5 ? -0.04 : pedals.gas && v < top - 0.5 ? 0.022 : 0;
+    pitch += (wantPitch - pitch) * Math.min(1, dt * 6);
+    rig.rotation.x = pitch;
+
+    for (const s of strands) {
+      const hanging = Math.PI - 0.1 - s.droop * 0.2, streaming = Math.PI / 2 + s.droop * (1.1 - 0.6 * blow);
+      s.m.rotation.x = hanging + (streaming - hanging) * blow + Math.sin(ph + s.phase) * (0.02 + 0.2 * wind);
+      s.m.rotation.z = s.spread * (0.3 + 0.7 * blow) + Math.sin(ph * 0.8 + s.phase * 1.3) * 0.16 * wind;
     }
+    head.rotation.y = Math.sin(t * 0.4) * 0.12;
+
+    dogHead.rotation.y = Math.sin(t * 0.7) * 0.35;
+    dogHead.rotation.z = Math.sin(t * 0.9 + 1) * 0.1 + Math.sin(ph * 0.9) * 0.03 * wind;
+    dogHead.rotation.x = -0.1 - 0.12 * wind + Math.sin(t * 1.7) * 0.05;
+    for (const e of ears) {
+      e.ear.rotation.x = 0.05 + 0.75 * blow + Math.sin(ph * 2.3 + e.s) * 0.3 * wind;   // pinned back and fluttering
+      e.ear.rotation.z = -e.s * 0.2 + Math.sin(ph * 1.9 + e.s * 2) * 0.18 * wind;
+    }
+    tongue.scale.z = 1 + 1.1 * wind;                                                    // more tongue at speed
+    tongue.rotation.x = 0.55 - 0.25 * blow + Math.sin(ph * 2) * (0.05 + 0.3 * wind);
+    tongue.rotation.y = Math.sin(ph * 1.3) * 0.7 * wind + 0.5 * blow;
+    for (const j of jowls) j.m.rotation.y = j.s * (0.05 + 0.95 * blow + Math.sin(ph * 2.6 + j.s) * 0.4 * wind);
+    for (const u of tufts) {
+      u.m.rotation.x = 2.5 + (Math.PI / 2 + u.lift - 2.5) * blow + Math.sin(ph * 1.7 + u.phase) * (0.03 + 0.3 * wind);   // flat at rest, streaming at speed
+      u.m.rotation.z = u.spread + Math.sin(ph * 1.3 + u.phase) * 0.25 * wind;
+    }
+
+    camera.fov = baseFov.value + 7 * Math.min(f, 1.4);   // the lens widens a little as you speed up
+    camera.updateProjectionMatrix();
 
     // Idle sway until someone takes the camera.
     const idle = !dragging && t - lastInput > 4 && !reduceMotion;
