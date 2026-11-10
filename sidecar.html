@@ -107,7 +107,7 @@
 <div class="caption">
   <h1>Next stop: Engineering Excellence</h1>
   <p>650 cc twin · one rider · one 45 kg German shepherd in the sidecar</p>
-  <p class="togo">Distance to go: <strong id="togo">5.0 km</strong> · Camera flashes: <strong id="tickets">0</strong></p>
+  <p class="togo">Distance to go: <strong id="togo">5.00 km</strong> · Camera flashes: <strong id="tickets">0</strong></p>
 </div>
 <div class="hint"><span>Drag to look around · pinch or scroll to zoom</span></div>
 <div id="toast" class="toast" role="status" hidden></div>
@@ -276,7 +276,7 @@
       g.fillStyle = '#0b6b3a';
       g.fillRect(0, 0, w, h);
     }
-    const distance = (k < 0 ? '\u2212' + -k : k) + ' km';
+    const distance = (k < 0 ? '\u2212' : '') + Math.abs(k) + ' km';
     g.lineJoin = 'round';
     const ink = (drawStroke, drawFill) => {   // on the flag, outline the white lettering so it stays readable
       if (pride) { g.strokeStyle = '#16181c'; g.lineWidth = 14; drawStroke(); }
@@ -299,14 +299,15 @@
     } while (g.measureText('Engineering Excellence').width > w - 110 && size > 40);
     ink(() => g.strokeText('Engineering Excellence', w / 2, 140), () => g.fillText('Engineering Excellence', w / 2, 140));
     // straight-ahead arrow, drawn rather than typed so it never depends on a font glyph
-    const ax = w / 2 - 150, ay = 286;
+    g.font = '800 104px Overpass, "Helvetica Neue", Arial, sans-serif';
+    const startX = (w - (96 + 34 + g.measureText(distance).width)) / 2;   // centre the arrow and distance together
+    const ax = startX + 48, ay = 286;
     g.beginPath();
     g.moveTo(ax, ay - 62); g.lineTo(ax + 48, ay - 4); g.lineTo(ax + 17, ay - 4); g.lineTo(ax + 17, ay + 58);
     g.lineTo(ax - 17, ay + 58); g.lineTo(ax - 17, ay - 4); g.lineTo(ax - 48, ay - 4); g.closePath();
     ink(() => g.stroke(), () => g.fill());
-    g.font = '800 104px Overpass, "Helvetica Neue", Arial, sans-serif';
     g.textAlign = 'left';
-    ink(() => g.strokeText(distance, w / 2 - 70, 292), () => g.fillText(distance, w / 2 - 70, 292));
+    ink(() => g.strokeText(distance, startX + 130, 292), () => g.fillText(distance, startX + 130, 292));
     // white border last, so it sits over the stripes
     g.strokeStyle = '#ffffff';
     g.lineWidth = 12;
@@ -649,7 +650,7 @@
 
   function frame() {
     const t = now();
-    const dt = Math.min(t - lastT, 0.25);   // a long gap (backgrounded tab) is skipped, not replayed
+    const dt = Math.min(t - lastT, 1);   // slow frames still count in full; only a long gap (backgrounded tab) is skipped
     lastT = t;
 
     // Holding neither pedal keeps your speed: it's a cruise, so the scene never rolls to a halt by itself.
@@ -664,15 +665,16 @@
     for (const s of scrollers) {
       s.obj.position.z = ((s.baseZ + travelled) % SPAN + SPAN) % SPAN - SPAN + 20;
     }
-    // A gantry comes round every 250 m.
-    gantry.position.z = SIGN_START + travelled - 250 * Math.floor((travelled + 192) / 250);
-
-    // Real kilometres now: the distance falls as fast as you ride. It keeps counting past zero on
-    // purpose: Engineering Excellence is a place you drive through, not a place you stop.
-    const remaining = START_KM - travelled / 1000;
-    const kmNow = Math.ceil(remaining - 1e-9);
+    // A gantry stands every 250 m, and each one states the distance from itself, like a real sign:
+    // 5, 4.75, 4.5 ... so no two in a row ever read the same. The 0 km gantry is the pride one, and
+    // they keep counting past zero on purpose: Engineering Excellence is a place you drive through,
+    // not a place you stop.
+    const lap = Math.floor((travelled + 192) / 250);
+    gantry.position.z = SIGN_START + travelled - 250 * lap;
+    const kmNow = START_KM - 0.25 * lap;
     if (kmNow !== km) { km = kmNow; signTex.redraw(km); }
-    const text = (remaining < -0.05 ? '−' : '') + Math.abs(remaining).toFixed(1) + ' km';
+    const remaining = START_KM - (travelled + SIGN_START) / 1000;   // a round figure exactly under each gantry
+    const text = (remaining < -0.005 ? '\u2212' : '') + Math.abs(remaining).toFixed(2) + ' km';
     if (text !== togoText) { togoText = text; togoEl.textContent = text; }
     if (String(kmh) !== speedText) {
       speedText = String(kmh);
